@@ -56,41 +56,98 @@ class Renderer {
     /**
      * Рендеринг тайлов (пол, стены, декорации, препятствия)
      * @param {Array<Array<number>>} map - карта тайлов (0 - пол, 1 - стена, 2 - колонна, 3 - дерево, 4 - скала, 5 - вода, 6 - лед, 7 - декорация)
+     * @param {ChunkSystem} chunkSystem - система чанков (опционально)
      */
-    renderTiles(map) {
-        if (!map || map.length === 0) return;
-
+    renderTiles(map, chunkSystem = null) {
         const tileSize = 64;
 
-        for (let y = 0; y < map.length; y++) {
-            for (let x = 0; x < map[y].length; x++) {
-                const tileType = map[y][x];
+        if (chunkSystem) {
+            // Рендерим только видимые чанки
+            const chunksToRender = chunkSystem.getChunksToRender(
+                this.camera.x, 
+                this.camera.y, 
+                this.canvas.width, 
+                this.canvas.height, 
+                tileSize
+            );
 
-                // Преобразуем координаты тайла в 2D координаты
-                const pos = isoTo2D(x, y);
+            for (const chunk of chunksToRender) {
+                if (chunk && chunk.tiles) {
+                    for (let y = 0; y < chunk.tiles.length; y++) {
+                        for (let x = 0; x < chunk.tiles[y].length; x++) {
+                            const tileType = chunk.tiles[y][x];
+                            
+                            // Преобразуем глобальные координаты тайла в 2D координаты
+                            const globalX = chunk.chunkX * chunk.size + x;
+                            const globalY = chunk.chunkY * chunk.size + y;
+                            const pos = isoTo2D(globalX, globalY);
 
-                // Корректируем позицию с учетом камеры
-                const screenX = pos.x - this.camera.x;
-                const screenY = pos.y - this.camera.y;
+                            // Корректируем позицию с учетом камеры
+                            const screenX = pos.x - this.camera.x;
+                            const screenY = pos.y - this.camera.y;
 
-                // Рисуем тайл в зависимости от типа
-                if (tileType === 0) { // Пол
-                    // Рисуем пол с текстурой
-                    this.drawTexturedFloor(screenX, screenY, tileSize);
-                } else if (tileType === 1) { // Стена
-                    this.drawWall(screenX, screenY, tileSize);
-                } else if (tileType === 2) { // Декорация (колонна)
-                    this.drawColumn(screenX, screenY, tileSize);
-                } else if (tileType === 3) { // Дерево (непроходимое)
-                    this.drawTree(screenX, screenY, tileSize);
-                } else if (tileType === 4) { // Скала (непроходимое)
-                    this.drawRock(screenX, screenY, tileSize);
-                } else if (tileType === 5) { // Вода (непроходимое)
-                    this.drawWater(screenX, screenY, tileSize);
-                } else if (tileType === 6) { // Лед (проходимое с эффектом)
-                    this.drawIce(screenX, screenY, tileSize);
-                } else if (tileType === 7) { // Декорация (проходимая)
-                    this.drawDecoration(screenX, screenY, tileSize);
+                            // Проверяем, находится ли тайл в пределах экрана
+                            if (screenX > -tileSize && screenX < this.canvas.width + tileSize &&
+                                screenY > -tileSize && screenY < this.canvas.height + tileSize) {
+                                
+                                // Рисуем тайл в зависимости от типа
+                                if (tileType === 0) { // Пол
+                                    // Рисуем пол с текстурой
+                                    this.drawTexturedFloor(screenX, screenY, tileSize);
+                                } else if (tileType === 1) { // Стена
+                                    this.drawWall(screenX, screenY, tileSize);
+                                } else if (tileType === 2) { // Декорация (колонна)
+                                    this.drawColumn(screenX, screenY, tileSize);
+                                } else if (tileType === 3) { // Дерево (непроходимое)
+                                    this.drawTree(screenX, screenY, tileSize);
+                                } else if (tileType === 4) { // Скала (непроходимое)
+                                    this.drawRock(screenX, screenY, tileSize);
+                                } else if (tileType === 5) { // Вода (непроходимое)
+                                    this.drawWater(screenX, screenY, tileSize);
+                                } else if (tileType === 6) { // Лед (проходимое с эффектом)
+                                    this.drawIce(screenX, screenY, tileSize);
+                                } else if (tileType === 7) { // Декорация (проходимая)
+                                    this.drawDecoration(screenX, screenY, tileSize);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // Старая логика для совместимости
+            if (!map || map.length === 0) return;
+
+            for (let y = 0; y < map.length; y++) {
+                for (let x = 0; x < map[y].length; x++) {
+                    const tileType = map[y][x];
+
+                    // Преобразуем координаты тайла в 2D координаты
+                    const pos = isoTo2D(x, y);
+
+                    // Корректируем позицию с учетом камеры
+                    const screenX = pos.x - this.camera.x;
+                    const screenY = pos.y - this.camera.y;
+
+                    // Рисуем тайл в зависимости от типа
+                    if (tileType === 0) { // Пол
+                        // Рисуем пол с текстурой
+                        this.drawTexturedFloor(screenX, screenY, tileSize);
+                    } else if (tileType === 1) { // Стена
+                        this.drawWall(screenX, screenY, tileSize);
+                    } else if (tileType === 2) { // Декорация (колонна)
+                        this.drawColumn(screenX, screenY, tileSize);
+                    } else if (tileType === 3) { // Дерево (непроходимое)
+                        this.drawTree(screenX, screenY, tileSize);
+                    } else if (tileType === 4) { // Скала (непроходимое)
+                        this.drawRock(screenX, screenY, tileSize);
+                    } else if (tileType === 5) { // Вода (непроходимое)
+                        this.drawWater(screenX, screenY, tileSize);
+                    } else if (tileType === 6) { // Лед (проходимое с эффектом)
+                        this.drawIce(screenX, screenY, tileSize);
+                    } else if (tileType === 7) { // Декорация (проходимая)
+                        this.drawDecoration(screenX, screenY, tileSize);
+                    }
                 }
             }
         }

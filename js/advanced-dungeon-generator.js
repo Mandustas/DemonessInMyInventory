@@ -68,12 +68,8 @@ class AdvancedDungeonGenerator {
         for (let y = 0; y < this.height; y++) {
             this.map[y] = [];
             for (let x = 0; x < this.width; x++) {
-                // Создаем границы из стен
-                if (x === 0 || y === 0 || x === this.width - 1 || y === this.height - 1) {
-                    this.map[y][x] = 1; // Стена
-                } else {
-                    this.map[y][x] = 1; // Сначала все стены
-                }
+                // Для бесконечной генерации не создаем границы
+                this.map[y][x] = 1; // Стена
             }
         }
     }

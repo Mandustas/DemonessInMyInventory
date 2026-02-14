@@ -8,12 +8,13 @@ class Game {
     constructor() {
         this.renderer = new Renderer('gameCanvas');
 
-        // Создаем тестовую карту
-        this.mapWidth = 50;
-        this.mapHeight = 50;
-        this.generateMap(this.mapWidth, this.mapHeight); // Увеличим размер карты
+        // Инициализируем систему чанков для бесконечной генерации
+        this.chunkSystem = new ChunkSystem(16); // Чанки размером 16x16 тайлов
 
-        // Получаем подходящую стартовую позицию для персонажа
+        // Генерируем стартовый чанк
+        this.chunkSystem.loadChunksAround(0, 0); // Используем стандартные радиусы
+
+        // Создаем персонажа в центре стартового чанка
         const startPos = this.getValidSpawnPosition();
         this.character = new Character(startPos.x, startPos.y); // Начальная позиция персонажа
 
@@ -40,12 +41,15 @@ class Game {
         // Создаем систему сохранения
         this.saveSystem = new SaveSystem(this);
 
-        // Создаем врагов пропорционально размеру карты
+        // Загружаем чанки вокруг персонажа
+        this.chunkSystem.loadChunksAround(this.character.x, this.character.y);
+
+        // Создаем врагов в стартовой области
         this.spawnEnemies();
 
         // Обновляем UI инвентаря
         this.character.updateInventoryUI();
-        
+
         // Обработчик изменения размера окна
         window.addEventListener('resize', () => this.handleResize());
         this.handleResize(); // Установить начальный размер
@@ -300,12 +304,12 @@ class Game {
         const dx = targetX - this.character.x;
         const dy = targetY - this.character.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        
+
         if (distance > 5) { // Если расстояние больше 5 пикселей
             const speed = 3; // Скорость перемещения
             const moveX = (dx / distance) * speed;
             const moveY = (dy / distance) * speed;
-            
+
             // Проверяем, можно ли двигаться в направлении цели
             const nextX = this.character.x + moveX;
             const nextY = this.character.y + moveY;
@@ -316,7 +320,7 @@ class Game {
                 // Резервный вариант, если функция недоступна
                 tilePos = { tileX: Math.floor(nextX / 64), tileY: Math.floor(nextY / 32) };
             }
-            
+
             // Проверяем коллизии с врагами перед перемещением
             if (this.isPassable(tilePos.tileX, tilePos.tileY) && !this.checkCharacterEnemyCollision(nextX, nextY)) {
                 this.character.move(moveX, moveY);
@@ -369,18 +373,48 @@ class Game {
     }
     
     /**
-     * Спаун врагов пропорционально размеру карты
+     * Спаун врагов в загруженных чанках
      */
     spawnEnemies() {
-        // Рассчитываем количество врагов на основе размера карты
-        const totalCells = this.mapWidth * this.mapHeight;
-        const enemyCount = Math.floor(totalCells / 100); // 1 враг на 100 клеток (минимум 3 врага)
-        
-        for (let i = 0; i < Math.max(enemyCount, 3); i++) {
+        // Рассчитываем количество врагов пропорционально количеству загруженных чанков
+        const loadedChunksCount = this.chunkSystem.activeChunks.size;
+        const enemiesToSpawn = Math.max(Math.floor(loadedChunksCount / 2), 2); // 0.5 врага на чанк, минимум 2
+
+        for (let i = 0; i < enemiesToSpawn; i++) {
             const [x, y] = this.getValidSpawnPositionForEnemy();
             const enemyTypes = ['basic', 'weak', 'strong', 'fast', 'tank'];
             const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
             this.createEnemy(x, y, randomType);
+        }
+    }
+
+    /**
+     * Обновление спауна врагов (добавление новых врагов по мере необходимости)
+     */
+    updateEnemySpawning() {
+        // Рассчитываем количество врагов, которое должно быть в игре
+        const loadedChunksCount = this.chunkSystem.activeChunks.size;
+        const desiredEnemyCount = Math.max(Math.floor(loadedChunksCount / 2), 3); // 0.5 врага на чанк, минимум 3
+        
+        // Если врагов меньше нужного количества, добавляем новых
+        if (this.enemies.length < desiredEnemyCount) {
+            const enemiesToAdd = desiredEnemyCount - this.enemies.length;
+            
+            for (let i = 0; i < enemiesToAdd; i++) {
+                const [x, y] = this.getValidSpawnPositionForEnemy();
+                const enemyTypes = ['basic', 'weak', 'strong', 'fast', 'tank'];
+                const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+                
+                // Проверяем, не слишком ли близко к игроку
+                const distanceToPlayer = Math.sqrt(
+                    Math.pow(x - this.character.x, 2) +
+                    Math.pow(y - this.character.y, 2)
+                );
+                
+                if (distanceToPlayer > 50) { // Минимальное расстояние от игрока
+                    this.createEnemy(x, y, randomType);
+                }
+            }
         }
     }
     
@@ -410,19 +444,14 @@ class Game {
     }
     
     /**
-     * Генерация карты с помощью продвинутого генератора подземелий
+     * Проверка, можно ли пройти через тайл
+     * @param {number} tileX - координата X тайла
+     * @param {number} tileY - координата Y тайла
+     * @returns {boolean} - проходимый ли тайл
      */
-    generateMap(width, height) {
-        const generator = new AdvancedDungeonGenerator(width, height);
-
-        // Рассчитываем количество комнат пропорционально размеру карты
-        const totalCells = width * height;
-        const roomCount = Math.floor(totalCells / 100); // 1 комната на 100 клеток (минимум 5 комнат)
-
-        this.map = generator.generateDungeon(Math.max(roomCount, 5), 6, 14, 4); // комнаты размером от 6x6 до 14x14, 4 биома
-
-        // Добавляем декорации
-        generator.addDecorations();
+    isPassable(tileX, tileY) {
+        // Используем chunkSystem для проверки проходимости
+        return this.chunkSystem.isPassable(tileX, tileY);
     }
     
     /**
@@ -430,11 +459,11 @@ class Game {
      */
     update() {
         if (this.gameState !== 'playing') return;
-        
+
         // Обработка движения персонажа с клавиатуры
         const speed = 3;
         let moved = false;
-        
+
         if (this.keys['w'] || this.keys['ц']) {
             // Проверяем, можно ли двигаться вверх
             const targetY = this.character.y - speed;
@@ -495,38 +524,44 @@ class Game {
                 moved = true;
             }
         }
-        
+
         // Центрируем камеру на персонаже
         this.renderer.centerCameraOnCharacter(this.character);
-        
+
+        // Загружаем новые чанки при движении персонажа
+        this.chunkSystem.loadChunksAround(this.character.x, this.character.y);
+
+        // Обновляем спаун врагов
+        this.updateEnemySpawning();
+
         // Обновляем врагов
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             const enemy = this.enemies[i];
-            
+
             // Обновляем состояние врага
-            enemy.update(this.character, this.map);
-            
+            enemy.update(this.character, null, this.chunkSystem); // Передаем chunkSystem для проверки проходимости
+
             // Проверяем коллизии с другими врагами и персонажем
             this.handleEnemyCollisions(enemy);
-            
+
             // Проверяем, жив ли враг
             if (!enemy.isAlive()) {
                 // Добавляем опыт за убийство
                 this.character.gainExperience(enemy.stats.maxHealth / 2);
-                
+
                 // Добавляем случайный предмет
                 if (Math.random() < 0.3) { // 30% шанс получить предмет
                     this.dropRandomItem(enemy.x, enemy.y);
                 }
-                
+
                 // Удаляем мертвого врага
                 this.enemies.splice(i, 1);
             }
         }
-        
+
         // Обновляем восстановление маны
         this.character.regenerateMana();
-        
+
         // Обновляем UI
         this.updateCharacterUI();
     }
@@ -557,18 +592,6 @@ class Game {
      * @param {number} tileY - координата Y тайла
      * @returns {boolean} - проходимый ли тайл
      */
-    isPassable(tileX, tileY) {
-        // Проверяем, находится ли тайл внутри границ карты
-        if (tileX < 0 || tileX >= this.map[0].length || tileY < 0 || tileY >= this.map.length) {
-            return false;
-        }
-        
-        // Проверяем тип тайла - проходимые: 0 (пол), 6 (лед), 7 (декорация)
-        // Непроходимые: 1 (стена), 2 (колонна), 3 (дерево), 4 (скала), 5 (вода)
-        const tileType = this.map[tileY][tileX];
-        return tileType === 0 || tileType === 6 || tileType === 7;
-    }
-    
     /**
      * Обработка коллизий врага с другими объектами
      * @param {Object} enemy - враг
@@ -627,27 +650,33 @@ class Game {
      * @returns {Object} - координаты {x, y}
      */
     getValidSpawnPosition() {
-        // Используем генератор карты для получения подходящей позиции
-        // Если у генератора есть метод получения свободной позиции, используем его
-        if (typeof AdvancedDungeonGenerator !== 'undefined' && this.map) {
-            // Попробуем найти подходящую позицию на карте
-            for (let attempts = 0; attempts < 1000; attempts++) {
-                const tileX = Math.floor(Math.random() * (this.map[0].length - 2)) + 1;
-                const tileY = Math.floor(Math.random() * (this.map.length - 2)) + 1;
-                
-                if (this.isPassable(tileX, tileY)) {
-                    // Преобразуем координаты тайла в 2D координаты
-                    const pos = isoTo2D(tileX, tileY);
-                    return { x: pos.x, y: pos.y };
+        // Для бесконечной генерации начинаем с центра стартового чанка
+        const centerX = 0; // Центр координат
+        const centerY = 0; // Центр координат
+        
+        // Проверяем, проходим ли центральный тайл
+        if (this.isPassable(centerX, centerY)) {
+            const pos = isoTo2D(centerX, centerY);
+            return { x: pos.x, y: pos.y };
+        }
+        
+        // Если центральный тайл непроходим, ищем ближайший проходимый
+        for (let radius = 1; radius < 10; radius++) {
+            for (let y = -radius; y <= radius; y++) {
+                for (let x = -radius; x <= radius; x++) {
+                    if (Math.abs(x) === radius || Math.abs(y) === radius) { // Только по периметру
+                        if (this.isPassable(centerX + x, centerY + y)) {
+                            const pos = isoTo2D(centerX + x, centerY + y);
+                            return { x: pos.x, y: pos.y };
+                        }
+                    }
                 }
             }
         }
         
-        // Если не удалось найти подходящую позицию, возвращаем центр карты
-        const centerX = Math.floor(this.map[0].length / 2);
-        const centerY = Math.floor(this.map.length / 2);
-        const centerPos = isoTo2D(centerX, centerY);
-        return { x: centerPos.x, y: centerPos.y };
+        // Если ничего не найдено, возвращаем центральную точку
+        const pos = isoTo2D(centerX, centerY);
+        return { x: pos.x, y: pos.y };
     }
     
     /**
@@ -655,27 +684,40 @@ class Game {
      * @returns {Array} - координаты [x, y]
      */
     getValidSpawnPositionForEnemy() {
-        // Попробуем найти подходящую позицию на карте, не слишком близко к персонажу
+        // Попробуем найти подходящую позицию в загруженных чанках, не слишком близко к персонажу
         for (let attempts = 0; attempts < 1000; attempts++) {
-            const tileX = Math.floor(Math.random() * (this.map[0].length - 2)) + 1;
-            const tileY = Math.floor(Math.random() * (this.map.length - 2)) + 1;
+            // Определяем диапазон поиска в пределах загруженных чанков
+            const chunkRange = 3; // Диапазон в чанках от персонажа
+            const tilesPerChunk = this.chunkSystem.chunkSize;
             
+            // Определяем координаты персонажа в системе чанков
+            const charChunkX = Math.floor(this.character.x / tilesPerChunk);
+            const charChunkY = Math.floor(this.character.y / tilesPerChunk);
+            
+            // Выбираем случайный чанк в диапазоне
+            const spawnChunkX = charChunkX + Math.floor(Math.random() * chunkRange * 2) - chunkRange;
+            const spawnChunkY = charChunkY + Math.floor(Math.random() * chunkRange * 2) - chunkRange;
+            
+            // Выбираем случайную позицию в чанке
+            const tileX = spawnChunkX * tilesPerChunk + Math.floor(Math.random() * tilesPerChunk);
+            const tileY = spawnChunkY * tilesPerChunk + Math.floor(Math.random() * tilesPerChunk);
+
             if (this.isPassable(tileX, tileY)) {
                 // Преобразуем координаты тайла в 2D координаты
                 const pos = isoTo2D(tileX, tileY);
-                
+
                 // Проверяем, не слишком ли близко к персонажу
                 const distanceToPlayer = Math.sqrt(
-                    Math.pow(pos.x - this.character.x, 2) + 
+                    Math.pow(pos.x - this.character.x, 2) +
                     Math.pow(pos.y - this.character.y, 2)
                 );
-                
-                if (distanceToPlayer > 100) { // Минимальное расстояние до игрока
+
+                if (distanceToPlayer > 100 && distanceToPlayer < 300) { // Минимальное и максимальное расстояние до игрока
                     return [pos.x, pos.y];
                 }
             }
         }
-        
+
         // Если не удалось найти подходящую позицию, возвращаем позицию подальше от игрока
         const angle = Math.random() * Math.PI * 2;
         const distance = 200; // Расстояние от игрока
@@ -690,18 +732,18 @@ class Game {
     render() {
         // Очищаем холст
         this.renderer.clear();
-        
-        // Рендерим карту
-        this.renderer.renderTiles(this.map);
-        
+
+        // Рендерим карту с использованием системы чанков
+        this.renderer.renderTiles(null, this.chunkSystem);
+
         // Рендерим врагов
         for (const enemy of this.enemies) {
             this.renderer.renderEnemy(enemy);
         }
-        
+
         // Рендерим персонажа
         this.renderer.renderCharacter(this.character);
-        
+
         // При необходимости рендерим сетку (для отладки)
         // this.renderer.renderGrid();
     }

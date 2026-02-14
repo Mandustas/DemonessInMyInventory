@@ -85,28 +85,29 @@ class Enemy {
     /**
      * Обновление состояния врага
      * @param {Character} player - игрок
-     * @param {Array<Array<number>>} map - карта
+     * @param {Array<Array<number>>} map - карта (может быть null для бесконечной генерации)
+     * @param {ChunkSystem} chunkSystem - система чанков (опционально)
      */
-    update(player, map) {
+    update(player, map, chunkSystem = null) {
         // Уменьшаем кулдаун атаки
         if (this.attackCooldown > 0) {
             this.attackCooldown--;
         }
-        
+
         // Проверяем расстояние до игрока
         const distanceToPlayer = Math.sqrt(
-            Math.pow(this.x - player.x, 2) + 
+            Math.pow(this.x - player.x, 2) +
             Math.pow(this.y - player.y, 2)
         );
-        
+
         if (distanceToPlayer <= this.detectionRange) {
             // Игрок в зоне обнаружения
             this.state = 'chasing';
             this.target = player;
-            
+
             // Двигаемся к игроку
-            this.moveToTarget(player, map);
-            
+            this.moveToTarget(player, map, chunkSystem);
+
             // Если в пределах атаки и кулдаун прошел
             if (distanceToPlayer <= this.attackRange && this.attackCooldown === 0) {
                 this.state = 'attacking';
@@ -123,20 +124,21 @@ class Enemy {
      * Движение к цели
      * @param {Character} target - цель для движения
      * @param {Array<Array<number>>} map - карта для проверки столкновений
+     * @param {ChunkSystem} chunkSystem - система чанков (опционально)
      */
-    moveToTarget(target, map) {
+    moveToTarget(target, map, chunkSystem = null) {
         const dx = target.x - this.x;
         const dy = target.y - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        
+
         if (distance > 0) {
             const moveX = (dx / distance) * this.speed;
             const moveY = (dy / distance) * this.speed;
-            
+
             // Проверяем столкновения с препятствиями (упрощенная проверка)
             const newX = this.x + moveX;
             const newY = this.y + moveY;
-            
+
             // Преобразуем координаты в координаты тайлов
             let tilePos;
             if (typeof getTileIndex !== 'undefined') {
@@ -145,26 +147,51 @@ class Enemy {
                 // Резервный вариант, если функция недоступна
                 tilePos = { tileX: Math.floor(newX / 64), tileY: Math.floor(newY / 32) };
             }
-            
+
             // Проверяем, является ли тайл проходимым
-            if (map && this.isPassable(tilePos.tileX, tilePos.tileY, map)) {
-                // Проверяем коллизию с целью перед движением
-                const tempPos = {
-                    x: newX,
-                    y: newY,
-                    hitboxRadius: this.hitboxRadius,
-                    checkCollisionWith: function(other) {
-                        const dx = this.x - other.x;
-                        const dy = this.y - other.y;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
-                        
-                        // Коллизия происходит, если расстояние меньше суммы радиусов
-                        return distance < (this.hitboxRadius + other.hitboxRadius);
+            if (map) {
+                // Используем старую логику с картой
+                if (this.isPassable(tilePos.tileX, tilePos.tileY, map)) {
+                    // Проверяем коллизию с целью перед движением
+                    const tempPos = {
+                        x: newX,
+                        y: newY,
+                        hitboxRadius: this.hitboxRadius,
+                        checkCollisionWith: function(other) {
+                            const dx = this.x - other.x;
+                            const dy = this.y - other.y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+
+                            // Коллизия происходит, если расстояние меньше суммы радиусов
+                            return distance < (this.hitboxRadius + other.hitboxRadius);
+                        }
+                    };
+                    if (!tempPos.checkCollisionWith(target)) {
+                        this.x = newX;
+                        this.y = newY;
                     }
-                };
-                if (!tempPos.checkCollisionWith(target)) {
-                    this.x = newX;
-                    this.y = newY;
+                }
+            } else if (chunkSystem) {
+                // Используем систему чанков для проверки проходимости
+                if (chunkSystem.isPassable(tilePos.tileX, tilePos.tileY)) {
+                    // Проверяем коллизию с целью перед движением
+                    const tempPos = {
+                        x: newX,
+                        y: newY,
+                        hitboxRadius: this.hitboxRadius,
+                        checkCollisionWith: function(other) {
+                            const dx = this.x - other.x;
+                            const dy = this.y - other.y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+
+                            // Коллизия происходит, если расстояние меньше суммы радиусов
+                            return distance < (this.hitboxRadius + other.hitboxRadius);
+                        }
+                    };
+                    if (!tempPos.checkCollisionWith(target)) {
+                        this.x = newX;
+                        this.y = newY;
+                    }
                 }
             }
         }
