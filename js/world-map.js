@@ -659,36 +659,36 @@ class ConnectedChunk {
     applyBiomeToTile(x, y, biomeType, rand) {
         switch (biomeType) {
             case 'ice':
-                // 10% шанс льда
-                if (rand < 0.1) {
+                // 5% шанс льда (уменьшено)
+                if (rand < 0.05) {
                     this.tiles[y][x] = 6;
                 }
                 break;
                 
             case 'forest':
-                // 12% шанс дерева (проверяем, чтобы не заблокировать проход)
-                if (rand < 0.12 && !this.wouldBlockPassage(x, y, 3)) {
+                // 6% шанс дерева (уменьшено с 12%)
+                if (rand < 0.06 && !this.wouldBlockPassage(x, y, 3)) {
                     this.tiles[y][x] = 3;
                 }
                 break;
                 
             case 'desert':
-                // 8% шанс скалы
-                if (rand < 0.08 && !this.wouldBlockPassage(x, y, 4)) {
+                // 4% шанс скалы (уменьшено с 8%)
+                if (rand < 0.04 && !this.wouldBlockPassage(x, y, 4)) {
                     this.tiles[y][x] = 4;
                 }
                 break;
                 
             case 'mountain':
-                // 25% шанс скалы
-                if (rand < 0.25 && !this.wouldBlockPassage(x, y, 4)) {
+                // 12% шанс скалы (уменьшено с 25%)
+                if (rand < 0.12 && !this.wouldBlockPassage(x, y, 4)) {
                     this.tiles[y][x] = 4;
                 }
                 break;
                 
             case 'swamp':
-                // 15% шанс воды
-                if (rand < 0.15 && !this.wouldBlockPassage(x, y, 5)) {
+                // 8% шанс воды (уменьшено с 15%)
+                if (rand < 0.08 && !this.wouldBlockPassage(x, y, 5)) {
                     this.tiles[y][x] = 5;
                 }
                 break;

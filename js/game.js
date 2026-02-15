@@ -374,15 +374,26 @@ class Game {
     }
     
     /**
-     * Спаун врагов в загруженных чанках
+     * Спаун врагов в загруженных чанках - равномерное распределение
      */
     spawnEnemies() {
         // Рассчитываем количество врагов пропорционально количеству загруженных чанков
         const loadedChunksCount = this.chunkSystem.activeChunks.size;
-        const enemiesToSpawn = Math.max(Math.floor(loadedChunksCount / 2), 2); // 0.5 врага на чанк, минимум 2
+        const enemiesToSpawn = Math.max(Math.floor(loadedChunksCount / 2), 2);
 
+        // Получаем список всех активных чанков
+        const activeChunkKeys = Array.from(this.chunkSystem.activeChunks);
+        
+        // Перемешиваем чанки для случайного распределения
+        this.shuffleArray(activeChunkKeys);
+
+        // Распределяем врагов по чанкам
         for (let i = 0; i < enemiesToSpawn; i++) {
-            const [x, y] = this.getValidSpawnPositionForEnemy();
+            // Выбираем чанк по очереди (равномерное распределение)
+            const chunkKey = activeChunkKeys[i % activeChunkKeys.length];
+            const [chunkX, chunkY] = chunkKey.split(',').map(Number);
+            
+            const [x, y] = this.getRandomPositionInChunk(chunkX, chunkY);
             const enemyTypes = ['basic', 'weak', 'strong', 'fast', 'tank'];
             const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
             this.createEnemy(x, y, randomType);
@@ -390,32 +401,80 @@ class Game {
     }
 
     /**
-     * Обновление спауна врагов (добавление новых врагов по мере необходимости)
+     * Обновление спауна врагов - равномерное распределение по всей карте
      */
     updateEnemySpawning() {
         // Рассчитываем количество врагов, которое должно быть в игре
         const loadedChunksCount = this.chunkSystem.activeChunks.size;
-        const desiredEnemyCount = Math.max(Math.floor(loadedChunksCount / 2), 3); // 0.5 врага на чанк, минимум 3
+        const desiredEnemyCount = Math.max(Math.floor(loadedChunksCount / 2), 3);
+        
+        // Получаем список всех активных чанков
+        const activeChunkKeys = Array.from(this.chunkSystem.activeChunks);
         
         // Если врагов меньше нужного количества, добавляем новых
         if (this.enemies.length < desiredEnemyCount) {
             const enemiesToAdd = desiredEnemyCount - this.enemies.length;
             
+            // Перемешиваем для случайного выбора чанка
+            this.shuffleArray(activeChunkKeys);
+            
             for (let i = 0; i < enemiesToAdd; i++) {
-                const [x, y] = this.getValidSpawnPositionForEnemy();
+                // Выбираем случайный чанк из активных
+                const chunkKey = activeChunkKeys[Math.floor(Math.random() * activeChunkKeys.length)];
+                const [chunkX, chunkY] = chunkKey.split(',').map(Number);
+                
+                const [x, y] = this.getRandomPositionInChunk(chunkX, chunkY);
                 const enemyTypes = ['basic', 'weak', 'strong', 'fast', 'tank'];
                 const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
                 
-                // Проверяем, не слишком ли близко к игроку
+                // Проверяем, не слишком ли близко к игроку (больше допустимое расстояние)
                 const distanceToPlayer = Math.sqrt(
                     Math.pow(x - this.character.x, 2) +
                     Math.pow(y - this.character.y, 2)
                 );
                 
-                if (distanceToPlayer > 50) { // Минимальное расстояние от игрока
+                if (distanceToPlayer > 80) { // Минимальное расстояние от игрока
                     this.createEnemy(x, y, randomType);
                 }
             }
+        }
+    }
+    
+    /**
+     * Получение случайной позиции в чанке
+     */
+    getRandomPositionInChunk(chunkX, chunkY) {
+        const tilesPerChunk = this.chunkSystem.chunkSize;
+        const worldStartX = chunkX * tilesPerChunk;
+        const worldStartY = chunkY * tilesPerChunk;
+        
+        // Пытаемся найти проходимую позицию в чанке
+        for (let attempts = 0; attempts < 50; attempts++) {
+            const localX = Math.floor(Math.random() * tilesPerChunk);
+            const localY = Math.floor(Math.random() * tilesPerChunk);
+            const tileX = worldStartX + localX;
+            const tileY = worldStartY + localY;
+            
+            if (this.isPassable(tileX, tileY)) {
+                const pos = isoTo2D(tileX, tileY);
+                return [pos.x, pos.y];
+            }
+        }
+        
+        // Если не нашли проходимую позицию, возвращаем центр чанка
+        const centerTileX = worldStartX + Math.floor(tilesPerChunk / 2);
+        const centerTileY = worldStartY + Math.floor(tilesPerChunk / 2);
+        const pos = isoTo2D(centerTileX, centerTileY);
+        return [pos.x, pos.y];
+    }
+    
+    /**
+     * Перемешивание массива (алгоритм Фишера-Йетса)
+     */
+    shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
         }
     }
     
