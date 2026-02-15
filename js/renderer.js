@@ -84,16 +84,12 @@ class Renderer {
      * @param {Character} character - персонаж, за которым следит камера
      */
     centerCameraOnCharacter(character) {
-        // Центрируем камеру с учетом зума
-        // Персонаж должен быть в центре экрана
-        const centerX = this.canvas.width / 2;
-        const centerY = this.canvas.height / 2;
-        
-        // Позиция камеры должна быть такой, чтобы персонаж был в центре
-        // При зуме мы умножаем разницу на зум, поэтому нужно поделить обратно
+        // Просто устанавливаем позицию камеры равной позиции персонажа
+        // Формула screenX = centerX + (pos.x - camera.x) * zoom автоматически
+        // поместит персонажа в центр экрана
         this.setCameraPosition(
-            character.x - centerX,
-            character.y - centerY
+            character.x,
+            character.y
         );
     }
     
@@ -136,8 +132,8 @@ class Renderer {
                             const centerY = this.canvas.height / 2;
                             
                             // Позиция объекта относительно центра экрана, умноженная на зум
-                            const screenX = centerX + (pos.x - this.camera.x - centerX) * this.camera.zoom;
-                            const screenY = centerY + (pos.y - this.camera.y - centerY) * this.camera.zoom;
+                            const screenX = centerX + (pos.x - this.camera.x) * this.camera.zoom;
+                            const screenY = centerY + (pos.y - this.camera.y) * this.camera.zoom;
 
                             // Проверяем, находится ли тайл в пределах экрана
                             if (screenX > -buffer && screenX < this.canvas.width + buffer &&
@@ -537,8 +533,8 @@ class Renderer {
         const centerY = this.canvas.height / 2;
         
         // Преобразуем координаты персонажа в экранные с учетом камеры и зума
-        const screenX = centerX + (character.x - this.camera.x - centerX) * this.camera.zoom;
-        const screenY = centerY + (character.y - this.camera.y - centerY) * this.camera.zoom;
+        const screenX = centerX + (character.x - this.camera.x) * this.camera.zoom;
+        const screenY = centerY + (character.y - this.camera.y) * this.camera.zoom;
         
         // Размеры с учетом зума
         const scaledWidth = character.width * this.camera.zoom;
@@ -627,8 +623,8 @@ class Renderer {
         const centerY = this.canvas.height / 2;
         
         // Преобразуем координаты врага в экранные с учетом камеры и зума
-        const screenX = centerX + (enemy.x - this.camera.x - centerX) * this.camera.zoom;
-        const screenY = centerY + (enemy.y - this.camera.y - centerY) * this.camera.zoom;
+        const screenX = centerX + (enemy.x - this.camera.x) * this.camera.zoom;
+        const screenY = centerY + (enemy.y - this.camera.y) * this.camera.zoom;
         
         // Размеры с учетом зума
         const scaledWidth = enemy.width * this.camera.zoom;
@@ -1012,8 +1008,8 @@ class Renderer {
                             const centerY = this.canvas.height / 2;
                             
                             // Позиция объекта относительно центра экрана с учетом зума
-                            const screenX = centerX + (pos.x - this.camera.x - centerX) * this.camera.zoom;
-                            const screenY = centerY + (pos.y - this.camera.y - centerY) * this.camera.zoom;
+                            const screenX = centerX + (pos.x - this.camera.x) * this.camera.zoom;
+                            const screenY = centerY + (pos.y - this.camera.y) * this.camera.zoom;
 
                             // Проверяем, находится ли тайл в пределах экрана
                             if (screenX > -buffer && screenX < this.canvas.width + buffer &&

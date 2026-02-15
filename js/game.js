@@ -288,9 +288,13 @@ class Game {
         const mouseX = e.clientX - rect.left;
         const mouseY = e.clientY - rect.top;
 
-        // Преобразуем координаты клика в мировые координаты
-        const worldX = mouseX + this.renderer.camera.x;
-        const worldY = mouseY + this.renderer.camera.y;
+        // Центр экрана
+        const centerX = this.renderer.canvas.width / 2;
+        const centerY = this.renderer.canvas.height / 2;
+        
+        // Преобразуем координаты клика в мировые координаты с учетом зума
+        const worldX = (mouseX - centerX) / this.renderer.camera.zoom + this.renderer.camera.x;
+        const worldY = (mouseY - centerY) / this.renderer.camera.zoom + this.renderer.camera.y;
 
         // Проверяем, был ли клик по врагу
         const clickedEnemy = this.getEnemyAtPosition(worldX, worldY);
@@ -330,10 +334,9 @@ class Game {
                 Math.pow(enemy.y - y, 2)
             );
             
-            // Проверяем, находится ли точка в пределах хитбокса врага (с учетом зума)
-            // Используем hitboxRadius врага для согласованности с системой коллизий
-            const hitRadius = enemy.hitboxRadius * this.renderer.camera.zoom;
-            if (distance <= hitRadius) {
+            // Проверяем, находится ли точка в пределах хитбокса врага
+            // hitboxRadius - это радиус в мировых координатах
+            if (distance <= enemy.hitboxRadius) {
                 return enemy;
             }
         }
