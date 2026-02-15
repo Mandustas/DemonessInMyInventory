@@ -115,6 +115,13 @@ class Game {
         this.renderer.canvas.addEventListener('mousedown', (e) => {
             this.handleClick(e);
         });
+
+        // Обработка контекстного меню (для правого клика)
+        this.renderer.canvas.addEventListener('contextmenu', (e) => {
+            if (GAME_CONFIG.DEBUG.TELEPORT_ON_RIGHT_CLICK) {
+                e.preventDefault(); // Предотвращаем контекстное меню при включенной отладке телепортации
+            }
+        });
         
         // Обработка зуммирования колесиком мыши
         this.renderer.canvas.addEventListener('wheel', (e) => {
@@ -291,21 +298,30 @@ class Game {
         // Центр экрана
         const centerX = this.renderer.canvas.width / 2;
         const centerY = this.renderer.canvas.height / 2;
-        
+
         // Преобразуем координаты клика в мировые координаты с учетом зума
         const worldX = (mouseX - centerX) / this.renderer.camera.zoom + this.renderer.camera.x;
         const worldY = (mouseY - centerY) / this.renderer.camera.zoom + this.renderer.camera.y;
 
+        // Проверяем, включена ли отладка телепортации по правому клику
+        if (GAME_CONFIG.DEBUG.TELEPORT_ON_RIGHT_CLICK && e.button === 2) { // Правая кнопка мыши
+            e.preventDefault(); // Предотвращаем контекстное меню
+            
+            // Телепортируем персонажа в точку клика
+            this.teleportTo(worldX, worldY);
+            return;
+        }
+
         // Проверяем, был ли клик по врагу
         const clickedEnemy = this.getEnemyAtPosition(worldX, worldY);
-        
+
         if (clickedEnemy && e.button === 0) { // Левая кнопка мыши
             // Атакуем врага
             const distance = Math.sqrt(
                 Math.pow(this.character.x - clickedEnemy.x, 2) +
                 Math.pow(this.character.y - clickedEnemy.y, 2)
             );
-            
+
             if (distance <= GAME_CONFIG.ATTACK.RANGE) { // В радиусе атаки
                 const damage = this.character.attack(clickedEnemy);
                 console.log(`Атакован враг, нанесено урона: ${damage}`);
@@ -372,6 +388,36 @@ class Game {
             if (this.isPassable(tilePos.tileX, tilePos.tileY) && !this.checkCharacterEnemyCollision(nextX, nextY)) {
                 this.character.move(moveX, moveY);
             }
+        }
+    }
+
+    /**
+     * Телепортация персонажа в точку (для отладки)
+     */
+    teleportTo(targetX, targetY) {
+        // Проверяем, можно ли телепортироваться в эту точку (проверяем проходимость)
+        let tilePos;
+        if (typeof getTileIndex !== 'undefined') {
+            tilePos = getTileIndex(targetX, targetY);
+        } else {
+            // Резервный вариант, если функция недоступна
+            tilePos = { tileX: Math.floor(targetX / GAME_CONFIG.TILE_DIMENSIONS.WIDTH), tileY: Math.floor(targetY / GAME_CONFIG.TILE_DIMENSIONS.HEIGHT) };
+        }
+
+        // Проверяем, является ли тайл проходимым
+        if (this.isPassable(tilePos.tileX, tilePos.tileY)) {
+            // Проверяем, нет ли врага в целевой позиции
+            if (!this.checkCharacterEnemyCollision(targetX, targetY)) {
+                // Телепортируем персонажа
+                this.character.x = targetX;
+                this.character.y = targetY;
+                
+                console.log(`Телепортирован в точку: (${targetX}, ${targetY})`);
+            } else {
+                console.log('Невозможно телепортироваться: враг в целевой позиции');
+            }
+        } else {
+            console.log('Невозможно телепортироваться: непроходимый тайл');
         }
     }
     

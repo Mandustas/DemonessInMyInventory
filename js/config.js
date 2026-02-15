@@ -10,9 +10,9 @@ const GAME_CONFIG = {
     
     // Настройки камеры
     CAMERA: {
-        DEFAULT_ZOOM: 4.0,
-        MIN_ZOOM: 0.5,
-        MAX_ZOOM: 5.0,
+        DEFAULT_ZOOM: 2.0,
+        MIN_ZOOM: 1.0,
+        MAX_ZOOM: 3.0,
         ZOOM_SPEED: 0.15,
         ZOOM_DELTA_ON_WHEEL: 0.3
     },
@@ -190,8 +190,8 @@ const GAME_CONFIG = {
     // Настройки генерации подземелья
     DUNGEON_GENERATOR: {
         DEFAULT_ROOM_COUNT: 8,
-        DEFAULT_MIN_ROOM_SIZE: 6,
-        DEFAULT_MAX_ROOM_SIZE: 14,
+        DEFAULT_MIN_ROOM_SIZE: 16,
+        DEFAULT_MAX_ROOM_SIZE: 114,
         DEFAULT_BIOME_COUNT: 3,
         MAX_GENERATION_ATTEMPTS: 10,
         ROOM_OVERLAP_ATTEMPTS: 100,
@@ -359,6 +359,11 @@ const GAME_CONFIG = {
     // Настройки поиска позиций
     POSITION_SEARCH: {
         MAX_RADIUS: 10
+    },
+
+    // Настройки отладки
+    DEBUG: {
+        TELEPORT_ON_RIGHT_CLICK: true  // Включить телепортацию по правому клику
     }
 };
 
