@@ -7,8 +7,12 @@ class Renderer {
             y: 0,
             zoom: 4.0, // Увеличенный зум для отображения меньшего количества объектов и улучшения производительности
             minZoom: 0.5,
-            maxZoom: 5.0
+            maxZoom: 5.0,
+            targetZoom: 4.0 // Для плавного зуммирования
         };
+        
+        // Размер тайла (базовый)
+        this.baseTileSize = 64;
 
         // Цвета для рендеринга
         this.colors = {
@@ -46,13 +50,50 @@ class Renderer {
     }
     
     /**
+     * Установка уровня зума
+     * @param {number} zoom - новый уровень зума
+     */
+    setZoom(zoom) {
+        // Ограничиваем зум в пределах допустимого диапазона
+        this.camera.zoom = Math.max(this.camera.minZoom, Math.min(this.camera.maxZoom, zoom));
+        this.camera.targetZoom = this.camera.zoom;
+    }
+    
+    /**
+     * Плавное обновление зума (вызывается каждый кадр)
+     */
+    updateZoom() {
+        // Плавная интерполяция зума
+        if (Math.abs(this.camera.zoom - this.camera.targetZoom) > 0.01) {
+            this.camera.zoom += (this.camera.targetZoom - this.camera.zoom) * 0.15;
+        } else {
+            this.camera.zoom = this.camera.targetZoom;
+        }
+    }
+    
+    /**
+     * Получение текущего размера тайла с учетом зума
+     * @returns {number} - размер тайла
+     */
+    getTileSize() {
+        return this.baseTileSize / this.camera.zoom;
+    }
+    
+    /**
      * Центрирование камеры на персонаже
      * @param {Character} character - персонаж, за которым следит камера
      */
     centerCameraOnCharacter(character) {
+        // Центрируем камеру с учетом зума
+        // Персонаж должен быть в центре экрана
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
+        
+        // Позиция камеры должна быть такой, чтобы персонаж был в центре
+        // При зуме мы умножаем разницу на зум, поэтому нужно поделить обратно
         this.setCameraPosition(
-            character.x - this.canvas.width / 2,
-            character.y - this.canvas.height / 2
+            character.x - centerX,
+            character.y - centerY
         );
     }
     
@@ -62,16 +103,20 @@ class Renderer {
      * @param {ChunkSystem} chunkSystem - система чанков (опционально)
      */
     renderTiles(map, chunkSystem = null) {
-        const tileSize = 64;
+        // Получаем размер тайла с учетом зума (умножаем, чтобы при увеличении зума объекты становились больше)
+        const tileSize = this.baseTileSize * this.camera.zoom;
+        
+        // буфер для проверки видимости - используем базовый размер для корректного определения видимости
+        const buffer = this.baseTileSize * 2;
 
         if (chunkSystem) {
-            // Рендерим только видимые чанки
+            // Рендерим только видимые чанки - используем базовый размер тайла
             const chunksToRender = chunkSystem.getChunksToRender(
                 this.camera.x, 
                 this.camera.y, 
                 this.canvas.width, 
                 this.canvas.height, 
-                tileSize
+                this.baseTileSize
             );
 
             for (const chunk of chunksToRender) {
@@ -85,13 +130,18 @@ class Renderer {
                             const globalY = chunk.chunkY * chunk.size + y;
                             const pos = isoTo2D(globalX, globalY);
 
-                            // Корректируем позицию с учетом камеры
-                            const screenX = pos.x - this.camera.x;
-                            const screenY = pos.y - this.camera.y;
+                            // Корректируем позицию с учетом камеры и зума
+                            // Центр экрана
+                            const centerX = this.canvas.width / 2;
+                            const centerY = this.canvas.height / 2;
+                            
+                            // Позиция объекта относительно центра экрана, умноженная на зум
+                            const screenX = centerX + (pos.x - this.camera.x - centerX) * this.camera.zoom;
+                            const screenY = centerY + (pos.y - this.camera.y - centerY) * this.camera.zoom;
 
                             // Проверяем, находится ли тайл в пределах экрана
-                            if (screenX > -tileSize && screenX < this.canvas.width + tileSize &&
-                                screenY > -tileSize && screenY < this.canvas.height + tileSize) {
+                            if (screenX > -buffer && screenX < this.canvas.width + buffer &&
+                                screenY > -buffer && screenY < this.canvas.height + buffer) {
                                 
                                 // Рисуем тайл в зависимости от типа
                                 if (tileType === 0) { // Пол
@@ -128,9 +178,13 @@ class Renderer {
                     // Преобразуем координаты тайла в 2D координаты
                     const pos = isoTo2D(x, y);
 
-                    // Корректируем позицию с учетом камеры
-                    const screenX = pos.x - this.camera.x;
-                    const screenY = pos.y - this.camera.y;
+                    // Центр экрана
+                    const centerX = this.canvas.width / 2;
+                    const centerY = this.canvas.height / 2;
+                    
+                    // Корректируем позицию с учетом камеры и зума
+                    const screenX = centerX + (pos.x - this.camera.x - centerX) * this.camera.zoom;
+                    const screenY = centerY + (pos.y - this.camera.y - centerY) * this.camera.zoom;
 
                     // Рисуем тайл в зависимости от типа
                     if (tileType === 0) { // Пол
@@ -478,24 +532,32 @@ class Renderer {
      * @param {Character} character - персонаж для рендеринга
      */
     renderCharacter(character) {
-        // Преобразуем координаты персонажа в экранные с учетом камеры
-        const screenX = character.x - this.camera.x;
-        const screenY = character.y - this.camera.y;
+        // Центр экрана
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
+        
+        // Преобразуем координаты персонажа в экранные с учетом камеры и зума
+        const screenX = centerX + (character.x - this.camera.x - centerX) * this.camera.zoom;
+        const screenY = centerY + (character.y - this.camera.y - centerY) * this.camera.zoom;
+        
+        // Размеры с учетом зума
+        const scaledWidth = character.width * this.camera.zoom;
+        const scaledHeight = character.height * this.camera.zoom;
 
         // Рисуем тело персонажа (изометрический ромб)
         this.ctx.fillStyle = this.colors.player;
-        this.drawIsometricEntity(screenX, screenY, character.width * 0.8, character.height * 0.6);
+        this.drawIsometricEntity(screenX, screenY, scaledWidth * 0.8, scaledHeight * 0.6);
 
         // Добавляем детали тела (доспехи)
         this.ctx.fillStyle = this.colors.playerHighlight;
         this.ctx.beginPath();
-        this.ctx.arc(screenX, screenY - 5, character.width * 0.2, 0, Math.PI * 2);
+        this.ctx.arc(screenX, screenY - 5 * this.camera.zoom, scaledWidth * 0.2, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Рисуем голову
         this.ctx.fillStyle = '#f9d9aa'; // Телесный цвет
         this.ctx.beginPath();
-        this.ctx.arc(screenX, screenY - 15, character.width * 0.25, 0, Math.PI * 2);
+        this.ctx.arc(screenX, screenY - 15 * this.camera.zoom, scaledWidth * 0.25, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Обводка головы
@@ -506,11 +568,11 @@ class Renderer {
         // Рисуем глаза
         this.ctx.fillStyle = '#000';
         this.ctx.beginPath();
-        this.ctx.arc(screenX - 4, screenY - 16, 2, 0, Math.PI * 2);
+        this.ctx.arc(screenX - 4 * this.camera.zoom, screenY - 16 * this.camera.zoom, 2 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
         
         this.ctx.beginPath();
-        this.ctx.arc(screenX + 4, screenY - 16, 2, 0, Math.PI * 2);
+        this.ctx.arc(screenX + 4 * this.camera.zoom, screenY - 16 * this.camera.zoom, 2 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Рисуем оружие (меч)
@@ -518,16 +580,16 @@ class Renderer {
         this.ctx.lineWidth = 3;
         this.ctx.lineCap = 'round';
         this.ctx.beginPath();
-        this.ctx.moveTo(screenX + 10, screenY - 10);
-        this.ctx.lineTo(screenX + 20, screenY - 20);
+        this.ctx.moveTo(screenX + 10 * this.camera.zoom, screenY - 10 * this.camera.zoom);
+        this.ctx.lineTo(screenX + 20 * this.camera.zoom, screenY - 20 * this.camera.zoom);
         this.ctx.stroke();
 
         // Рисуем рукоять меча
         this.ctx.fillStyle = '#8b4513'; // Коричневый
-        this.ctx.fillRect(screenX + 8, screenY - 8, 5, 10);
+        this.ctx.fillRect(screenX + 8 * this.camera.zoom, screenY - 8 * this.camera.zoom, 5 * this.camera.zoom, 10 * this.camera.zoom);
 
         // Рисуем индикатор здоровья
-        this.renderHealthBar(character, screenX, screenY - 25);
+        this.renderHealthBar(character, screenX, screenY - 25 * this.camera.zoom);
     }
     
     /**
@@ -560,67 +622,76 @@ class Renderer {
      * @param {Object} enemy - объект врага
      */
     renderEnemy(enemy) {
-        // Преобразуем координаты врага в экранные с учетом камеры
-        const screenX = enemy.x - this.camera.x;
-        const screenY = enemy.y - this.camera.y;
+        // Центр экрана
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
+        
+        // Преобразуем координаты врага в экранные с учетом камеры и зума
+        const screenX = centerX + (enemy.x - this.camera.x - centerX) * this.camera.zoom;
+        const screenY = centerY + (enemy.y - this.camera.y - centerY) * this.camera.zoom;
+        
+        // Размеры с учетом зума
+        const scaledWidth = enemy.width * this.camera.zoom;
+        const scaledHeight = enemy.height * this.camera.zoom;
 
         // Рисуем врага в зависимости от типа
         switch(enemy.type) {
             case 'weak':
-                this.drawWeakEnemy(screenX, screenY, enemy);
+                this.drawWeakEnemy(screenX, screenY, scaledWidth, scaledHeight);
                 break;
             case 'strong':
-                this.drawStrongEnemy(screenX, screenY, enemy);
+                this.drawStrongEnemy(screenX, screenY, scaledWidth, scaledHeight);
                 break;
             case 'fast':
-                this.drawFastEnemy(screenX, screenY, enemy);
+                this.drawFastEnemy(screenX, screenY, scaledWidth, scaledHeight);
                 break;
             case 'tank':
-                this.drawTankEnemy(screenX, screenY, enemy);
+                this.drawTankEnemy(screenX, screenY, scaledWidth, scaledHeight);
                 break;
             default:
-                this.drawBasicEnemy(screenX, screenY, enemy);
+                this.drawBasicEnemy(screenX, screenY, scaledWidth, scaledHeight);
         }
 
         // Рисуем индикатор здоровья врага
-        this.renderHealthBar(enemy, screenX, screenY - 25);
+        this.renderHealthBar(enemy, screenX, screenY - 25 * this.camera.zoom);
     }
 
     /**
      * Рендеринг базового врага
      * @param {number} screenX - X координата на экране
      * @param {number} screenY - Y координата на экране
-     * @param {Object} enemy - объект врага
+     * @param {number} width - ширина с учетом зума
+     * @param {number} height - высота с учетом зума
      */
-    drawBasicEnemy(screenX, screenY, enemy) {
+    drawBasicEnemy(screenX, screenY, width, height) {
         // Тело врага
         this.ctx.fillStyle = this.colors.enemy;
-        this.drawIsometricEntity(screenX, screenY, enemy.width * 0.8, enemy.height * 0.6);
+        this.drawIsometricEntity(screenX, screenY, width * 0.8, height * 0.6);
 
         // Голова
-        this.ctx.fillStyle = '#e03c3c'; // Более темный красный
+        this.ctx.fillStyle = '#e03c3c';
         this.ctx.beginPath();
-        this.ctx.arc(screenX, screenY - 15, enemy.width * 0.25, 0, Math.PI * 2);
+        this.ctx.arc(screenX, screenY - 15 * this.camera.zoom, width * 0.25, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Глаза
         this.ctx.fillStyle = '#000';
         this.ctx.beginPath();
-        this.ctx.arc(screenX - 5, screenY - 17, 2, 0, Math.PI * 2);
+        this.ctx.arc(screenX - 5 * this.camera.zoom, screenY - 17 * this.camera.zoom, 2 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
         
         this.ctx.beginPath();
-        this.ctx.arc(screenX + 5, screenY - 17, 2, 0, Math.PI * 2);
+        this.ctx.arc(screenX + 5 * this.camera.zoom, screenY - 17 * this.camera.zoom, 2 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Красные глаза
         this.ctx.fillStyle = '#ff0000';
         this.ctx.beginPath();
-        this.ctx.arc(screenX - 5, screenY - 17, 1, 0, Math.PI * 2);
+        this.ctx.arc(screenX - 5 * this.camera.zoom, screenY - 17 * this.camera.zoom, 1 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
         
         this.ctx.beginPath();
-        this.ctx.arc(screenX + 5, screenY - 17, 1, 0, Math.PI * 2);
+        this.ctx.arc(screenX + 5 * this.camera.zoom, screenY - 17 * this.camera.zoom, 1 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
     }
 
@@ -628,37 +699,38 @@ class Renderer {
      * Рендеринг слабого врага
      * @param {number} screenX - X координата на экране
      * @param {number} screenY - Y координата на экране
-     * @param {Object} enemy - объект врага
+     * @param {number} width - ширина с учетом зума
+     * @param {number} height - высота с учетом зума
      */
-    drawWeakEnemy(screenX, screenY, enemy) {
+    drawWeakEnemy(screenX, screenY, width, height) {
         // Тело врага
         this.ctx.fillStyle = this.colors.enemyWeak;
-        this.drawIsometricEntity(screenX, screenY, enemy.width * 0.7, enemy.height * 0.5);
+        this.drawIsometricEntity(screenX, screenY, width * 0.7, height * 0.5);
 
         // Голова
-        this.ctx.fillStyle = '#888888'; // Более темный серый
+        this.ctx.fillStyle = '#888888';
         this.ctx.beginPath();
-        this.ctx.arc(screenX, screenY - 12, enemy.width * 0.2, 0, Math.PI * 2);
+        this.ctx.arc(screenX, screenY - 12 * this.camera.zoom, width * 0.2, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Глаза
         this.ctx.fillStyle = '#000';
         this.ctx.beginPath();
-        this.ctx.arc(screenX - 4, screenY - 14, 1.5, 0, Math.PI * 2);
+        this.ctx.arc(screenX - 4 * this.camera.zoom, screenY - 14 * this.camera.zoom, 1.5 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
         
         this.ctx.beginPath();
-        this.ctx.arc(screenX + 4, screenY - 14, 1.5, 0, Math.PI * 2);
+        this.ctx.arc(screenX + 4 * this.camera.zoom, screenY - 14 * this.camera.zoom, 1.5 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Красные глаза
         this.ctx.fillStyle = '#ff0000';
         this.ctx.beginPath();
-        this.ctx.arc(screenX - 4, screenY - 14, 0.8, 0, Math.PI * 2);
+        this.ctx.arc(screenX - 4 * this.camera.zoom, screenY - 14 * this.camera.zoom, 0.8 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
         
         this.ctx.beginPath();
-        this.ctx.arc(screenX + 4, screenY - 14, 0.8, 0, Math.PI * 2);
+        this.ctx.arc(screenX + 4 * this.camera.zoom, screenY - 14 * this.camera.zoom, 0.8 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
     }
 
@@ -666,43 +738,44 @@ class Renderer {
      * Рендеринг сильного врага
      * @param {number} screenX - X координата на экране
      * @param {number} screenY - Y координата на экране
-     * @param {Object} enemy - объект врага
+     * @param {number} width - ширина с учетом зума
+     * @param {number} height - высота с учетом зума
      */
-    drawStrongEnemy(screenX, screenY, enemy) {
+    drawStrongEnemy(screenX, screenY, width, height) {
         // Тело врага
         this.ctx.fillStyle = this.colors.enemyStrong;
-        this.drawIsometricEntity(screenX, screenY, enemy.width * 0.9, enemy.height * 0.7);
+        this.drawIsometricEntity(screenX, screenY, width * 0.9, height * 0.7);
 
         // Доспехи
-        this.ctx.fillStyle = '#cc5500'; // Темнее оранжевый
+        this.ctx.fillStyle = '#cc5500';
         this.ctx.beginPath();
-        this.ctx.arc(screenX, screenY - 5, enemy.width * 0.25, 0, Math.PI * 2);
+        this.ctx.arc(screenX, screenY - 5 * this.camera.zoom, width * 0.25, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Голова
-        this.ctx.fillStyle = '#e65100'; // Еще темнее оранжевый
+        this.ctx.fillStyle = '#e65100';
         this.ctx.beginPath();
-        this.ctx.arc(screenX, screenY - 18, enemy.width * 0.3, 0, Math.PI * 2);
+        this.ctx.arc(screenX, screenY - 18 * this.camera.zoom, width * 0.3, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Глаза
         this.ctx.fillStyle = '#000';
         this.ctx.beginPath();
-        this.ctx.arc(screenX - 6, screenY - 20, 2.5, 0, Math.PI * 2);
+        this.ctx.arc(screenX - 6 * this.camera.zoom, screenY - 20 * this.camera.zoom, 2.5 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
         
         this.ctx.beginPath();
-        this.ctx.arc(screenX + 6, screenY - 20, 2.5, 0, Math.PI * 2);
+        this.ctx.arc(screenX + 6 * this.camera.zoom, screenY - 20 * this.camera.zoom, 2.5 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Красные глаза
         this.ctx.fillStyle = '#ff0000';
         this.ctx.beginPath();
-        this.ctx.arc(screenX - 6, screenY - 20, 1.2, 0, Math.PI * 2);
+        this.ctx.arc(screenX - 6 * this.camera.zoom, screenY - 20 * this.camera.zoom, 1.2 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
         
         this.ctx.beginPath();
-        this.ctx.arc(screenX + 6, screenY - 20, 1.2, 0, Math.PI * 2);
+        this.ctx.arc(screenX + 6 * this.camera.zoom, screenY - 20 * this.camera.zoom, 1.2 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Оружие
@@ -710,8 +783,8 @@ class Renderer {
         this.ctx.lineWidth = 4;
         this.ctx.lineCap = 'round';
         this.ctx.beginPath();
-        this.ctx.moveTo(screenX - 15, screenY);
-        this.ctx.lineTo(screenX - 25, screenY - 10);
+        this.ctx.moveTo(screenX - 15 * this.camera.zoom, screenY);
+        this.ctx.lineTo(screenX - 25 * this.camera.zoom, screenY - 10 * this.camera.zoom);
         this.ctx.stroke();
     }
 
@@ -719,50 +792,51 @@ class Renderer {
      * Рендеринг быстрого врага
      * @param {number} screenX - X координата на экране
      * @param {number} screenY - Y координата на экране
-     * @param {Object} enemy - объект врага
+     * @param {number} width - ширина с учетом зума
+     * @param {number} height - высота с учетом зума
      */
-    drawFastEnemy(screenX, screenY, enemy) {
+    drawFastEnemy(screenX, screenY, width, height) {
         // Тело врага (более вытянутое для скорости)
         this.ctx.fillStyle = this.colors.enemyFast;
-        this.drawIsometricEntity(screenX, screenY, enemy.width * 0.6, enemy.height * 0.5);
+        this.drawIsometricEntity(screenX, screenY, width * 0.6, height * 0.5);
 
         // Голова
-        this.ctx.fillStyle = '#e6c200'; // Более темный желтый
+        this.ctx.fillStyle = '#e6c200';
         this.ctx.beginPath();
-        this.ctx.arc(screenX, screenY - 10, enemy.width * 0.2, 0, Math.PI * 2);
+        this.ctx.arc(screenX, screenY - 10 * this.camera.zoom, width * 0.2, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Глаза
         this.ctx.fillStyle = '#000';
         this.ctx.beginPath();
-        this.ctx.arc(screenX - 4, screenY - 12, 1.8, 0, Math.PI * 2);
+        this.ctx.arc(screenX - 4 * this.camera.zoom, screenY - 12 * this.camera.zoom, 1.8 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
         
         this.ctx.beginPath();
-        this.ctx.arc(screenX + 4, screenY - 12, 1.8, 0, Math.PI * 2);
+        this.ctx.arc(screenX + 4 * this.camera.zoom, screenY - 12 * this.camera.zoom, 1.8 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Красные глаза
         this.ctx.fillStyle = '#ff0000';
         this.ctx.beginPath();
-        this.ctx.arc(screenX - 4, screenY - 12, 0.9, 0, Math.PI * 2);
+        this.ctx.arc(screenX - 4 * this.camera.zoom, screenY - 12 * this.camera.zoom, 0.9 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
         
         this.ctx.beginPath();
-        this.ctx.arc(screenX + 4, screenY - 12, 0.9, 0, Math.PI * 2);
+        this.ctx.arc(screenX + 4 * this.camera.zoom, screenY - 12 * this.camera.zoom, 0.9 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Эффект скорости (линии)
         this.ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
         this.ctx.lineWidth = 1;
         this.ctx.beginPath();
-        this.ctx.moveTo(screenX - 15, screenY + 5);
-        this.ctx.lineTo(screenX - 10, screenY);
+        this.ctx.moveTo(screenX - 15 * this.camera.zoom, screenY + 5 * this.camera.zoom);
+        this.ctx.lineTo(screenX - 10 * this.camera.zoom, screenY);
         this.ctx.stroke();
 
         this.ctx.beginPath();
-        this.ctx.moveTo(screenX + 15, screenY + 5);
-        this.ctx.lineTo(screenX + 10, screenY);
+        this.ctx.moveTo(screenX + 15 * this.camera.zoom, screenY + 5 * this.camera.zoom);
+        this.ctx.lineTo(screenX + 10 * this.camera.zoom, screenY);
         this.ctx.stroke();
     }
 
@@ -770,50 +844,51 @@ class Renderer {
      * Рендеринг танка
      * @param {number} screenX - X координата на экране
      * @param {number} screenY - Y координата на экране
-     * @param {Object} enemy - объект врага
+     * @param {number} width - ширина с учетом зума
+     * @param {number} height - высота с учетом зума
      */
-    drawTankEnemy(screenX, screenY, enemy) {
+    drawTankEnemy(screenX, screenY, width, height) {
         // Тело врага (широкое и массивное)
         this.ctx.fillStyle = this.colors.enemyTank;
-        this.drawIsometricEntity(screenX, screenY, enemy.width * 1.1, enemy.height * 0.8);
+        this.drawIsometricEntity(screenX, screenY, width * 1.1, height * 0.8);
 
         // Доспехи
-        this.ctx.fillStyle = '#6d0000'; // Темнее красный
+        this.ctx.fillStyle = '#6d0000';
         this.ctx.beginPath();
-        this.ctx.arc(screenX, screenY - 8, enemy.width * 0.3, 0, Math.PI * 2);
+        this.ctx.arc(screenX, screenY - 8 * this.camera.zoom, width * 0.3, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Голова
-        this.ctx.fillStyle = '#700000'; // Еще темнее красный
+        this.ctx.fillStyle = '#700000';
         this.ctx.beginPath();
-        this.ctx.arc(screenX, screenY - 22, enemy.width * 0.35, 0, Math.PI * 2);
+        this.ctx.arc(screenX, screenY - 22 * this.camera.zoom, width * 0.35, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Глаза
         this.ctx.fillStyle = '#000';
         this.ctx.beginPath();
-        this.ctx.arc(screenX - 7, screenY - 24, 3, 0, Math.PI * 2);
+        this.ctx.arc(screenX - 7 * this.camera.zoom, screenY - 24 * this.camera.zoom, 3 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
         
         this.ctx.beginPath();
-        this.ctx.arc(screenX + 7, screenY - 24, 3, 0, Math.PI * 2);
+        this.ctx.arc(screenX + 7 * this.camera.zoom, screenY - 24 * this.camera.zoom, 3 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Красные глаза
         this.ctx.fillStyle = '#ff0000';
         this.ctx.beginPath();
-        this.ctx.arc(screenX - 7, screenY - 24, 1.5, 0, Math.PI * 2);
+        this.ctx.arc(screenX - 7 * this.camera.zoom, screenY - 24 * this.camera.zoom, 1.5 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
         
         this.ctx.beginPath();
-        this.ctx.arc(screenX + 7, screenY - 24, 1.5, 0, Math.PI * 2);
+        this.ctx.arc(screenX + 7 * this.camera.zoom, screenY - 24 * this.camera.zoom, 1.5 * this.camera.zoom, 0, Math.PI * 2);
         this.ctx.fill();
 
         // Щит
         this.ctx.strokeStyle = '#555';
         this.ctx.lineWidth = 3;
         this.ctx.beginPath();
-        this.ctx.arc(screenX + 15, screenY + 5, 12, 0, Math.PI, true);
+        this.ctx.arc(screenX + 15 * this.camera.zoom, screenY + 5 * this.camera.zoom, 12 * this.camera.zoom, 0, Math.PI, true);
         this.ctx.stroke();
     }
     
@@ -903,6 +978,12 @@ class Renderer {
      */
     getAllRenderablesWithDepth(map, chunkSystem, enemies, character) {
         const allRenderables = [];
+        
+        // Получаем размер тайла с учетом зума (умножаем, чтобы при увеличении зума объекты становились больше)
+        const tileSize = this.baseTileSize * this.camera.zoom;
+        
+        // Буфер для проверки видимости - используем базовый размер
+        const buffer = this.baseTileSize * 2;
 
         // Добавляем тайлы с 3D-объектами (деревья, скалы и т.д.) которые должны участвовать в глубинной сортировке
         if (chunkSystem) {
@@ -911,7 +992,7 @@ class Renderer {
                 this.camera.y,
                 this.canvas.width,
                 this.canvas.height,
-                64 // tileSize
+                this.baseTileSize
             );
 
             for (const chunk of chunksToRender) {
@@ -925,13 +1006,18 @@ class Renderer {
                             const globalY = chunk.chunkY * chunk.size + y;
                             const pos = isoTo2D(globalX, globalY);
 
-                            // Корректируем позицию с учетом камеры
-                            const screenX = pos.x - this.camera.x;
-                            const screenY = pos.y - this.camera.y;
+                            // Корректируем позицию с учетом камеры и зума
+                            // Центр экрана
+                            const centerX = this.canvas.width / 2;
+                            const centerY = this.canvas.height / 2;
+                            
+                            // Позиция объекта относительно центра экрана с учетом зума
+                            const screenX = centerX + (pos.x - this.camera.x - centerX) * this.camera.zoom;
+                            const screenY = centerY + (pos.y - this.camera.y - centerY) * this.camera.zoom;
 
                             // Проверяем, находится ли тайл в пределах экрана
-                            if (screenX > -64 && screenX < this.canvas.width + 64 &&
-                                screenY > -32 && screenY < this.canvas.height + 32) {
+                            if (screenX > -buffer && screenX < this.canvas.width + buffer &&
+                                screenY > -buffer / 2 && screenY < this.canvas.height + buffer / 2) {
 
                                 // Добавляем только тайлы с 3D-объектами (деревья, скалы, колонны и т.д.) которые должны участвовать в глубинной сортировке
                                 if (tileType === 2 || tileType === 3 || tileType === 4) { // Декорация, дерево, скала
@@ -940,13 +1026,13 @@ class Renderer {
                                         y: pos.y,
                                         height: tileType === 3 ? 60 : tileType === 4 ? 50 : 30, // Разная высота для разных объектов
                                         render: () => {
-                                            // Рендерим основной тайл
+                                            // Рендерим основной тайл с учетом зума
                                             if (tileType === 2) { // Колонна
-                                                this.drawColumn(screenX, screenY, 64);
+                                                this.drawColumn(screenX, screenY, tileSize);
                                             } else if (tileType === 3) { // Дерево
-                                                this.drawTree(screenX, screenY, 64);
+                                                this.drawTree(screenX, screenY, tileSize);
                                             } else if (tileType === 4) { // Скала
-                                                this.drawRock(screenX, screenY, 64);
+                                                this.drawRock(screenX, screenY, tileSize);
                                             }
                                         }
                                     });
@@ -967,12 +1053,17 @@ class Renderer {
                     // Преобразуем координаты тайла в 2D координаты
                     const pos = isoTo2D(x, y);
 
-                    // Проверяем, находится ли тайл в пределах экрана
-                    const screenX = pos.x - this.camera.x;
-                    const screenY = pos.y - this.camera.y;
+                    // Центр экрана
+                    const centerX = this.canvas.width / 2;
+                    const centerY = this.canvas.height / 2;
+                    
+                    // Позиция объекта относительно центра экрана с учетом зума
+                    const screenX = centerX + (pos.x - this.camera.x - centerX) * this.camera.zoom;
+                    const screenY = centerY + (pos.y - this.camera.y - centerY) * this.camera.zoom;
 
-                    if (screenX > -64 && screenX < this.canvas.width + 64 &&
-                        screenY > -32 && screenY < this.canvas.height + 32) {
+                    // Проверяем, находится ли тайл в пределах экрана
+                    if (screenX > -buffer && screenX < this.canvas.width + buffer &&
+                        screenY > -buffer / 2 && screenY < this.canvas.height + buffer / 2) {
 
                         // Добавляем только тайлы с 3D-объектами (деревья, скалы, колонны и т.д.) которые должны участвовать в глубинной сортировке
                         if (tileType === 2 || tileType === 3 || tileType === 4) { // Декорация, дерево, скала
@@ -981,13 +1072,13 @@ class Renderer {
                                 y: pos.y,
                                 height: tileType === 3 ? 60 : tileType === 4 ? 50 : 30, // Разная высота для разных объектов
                                 render: () => {
-                                    // Рендерим основной тайл
+                                    // Рендерим основной тайл с учетом зума
                                     if (tileType === 2) { // Колонна
-                                        this.drawColumn(screenX, screenY, 64);
+                                        this.drawColumn(screenX, screenY, tileSize);
                                     } else if (tileType === 3) { // Дерево
-                                        this.drawTree(screenX, screenY, 64);
+                                        this.drawTree(screenX, screenY, tileSize);
                                     } else if (tileType === 4) { // Скала
-                                        this.drawRock(screenX, screenY, 64);
+                                        this.drawRock(screenX, screenY, tileSize);
                                     }
                                 }
                             });

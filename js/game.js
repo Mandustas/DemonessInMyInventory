@@ -115,6 +115,12 @@ class Game {
         this.renderer.canvas.addEventListener('mousedown', (e) => {
             this.handleClick(e);
         });
+        
+        // Обработка зуммирования колесиком мыши
+        this.renderer.canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            this.handleZoom(e);
+        }, { passive: false });
 
         // Обработка кнопки открытия дерева навыков
         document.getElementById('skillTreeButton').addEventListener('click', () => {
@@ -324,8 +330,10 @@ class Game {
                 Math.pow(enemy.y - y, 2)
             );
             
-            // Проверяем, находится ли точка в пределах хитбокса врага
-            if (distance <= enemy.width / 2) {
+            // Проверяем, находится ли точка в пределах хитбокса врага (с учетом зума)
+            // Используем hitboxRadius врага для согласованности с системой коллизий
+            const hitRadius = enemy.hitboxRadius * this.renderer.camera.zoom;
+            if (distance <= hitRadius) {
                 return enemy;
             }
         }
@@ -783,11 +791,32 @@ class Game {
     }
     
     /**
+     * Обработка зуммирования колесиком мыши
+     * @param {WheelEvent} e - событие колеса мыши
+     */
+    handleZoom(e) {
+        // Получаем направление прокрутки
+        const zoomDelta = e.deltaY > 0 ? -0.3 : 0.3;
+        
+        // Вычисляем новый зум
+        const newZoom = this.renderer.camera.targetZoom + zoomDelta;
+        
+        // Применяем зум с ограничениями
+        this.renderer.camera.targetZoom = Math.max(
+            this.renderer.camera.minZoom, 
+            Math.min(this.renderer.camera.maxZoom, newZoom)
+        );
+    }
+    
+    /**
      * Рендеринг игры
      */
     render() {
         // Очищаем холст
         this.renderer.clear();
+        
+        // Обновляем плавный зум
+        this.renderer.updateZoom();
 
         // Рендерим фоновые тайлы (пол, вода и т.д.)
         this.renderer.renderBackgroundTiles(null, this.chunkSystem);
