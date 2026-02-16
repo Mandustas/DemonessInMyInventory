@@ -66,13 +66,29 @@ class PIXIRenderer {
         this.tileLayer = new PIXI.Container();
         this.mainContainer.addChild(this.tileLayer);
 
-        // Слой для объектов (персонажи, враги, предметы)
+        // Слой для объектов (персонажи, враги)
         this.objectLayer = new PIXI.Container();
+        this.objectLayer.eventMode = 'none'; // Отключаем интерактивность для объектов
         this.mainContainer.addChild(this.objectLayer);
 
         // Слой для UI элементов (здоровье, эффекты)
         this.uiLayer = new PIXI.Container();
         this.mainContainer.addChild(this.uiLayer);
+
+        // Слой для частиц
+        this.particleLayer = new PIXI.ParticleContainer(10000, {
+            scale: true,
+            position: true,
+            rotation: true,
+            uvs: true,
+            alpha: true
+        });
+        this.mainContainer.addChild(this.particleLayer);
+
+        // Слой для предметов (над частицами, под UI)
+        this.itemLayer = new PIXI.Container();
+        this.itemLayer.eventMode = 'passive'; // Пропускаем события через контейнер, но обрабатываем на детях
+        this.mainContainer.addChild(this.itemLayer);
 
         // Инициализация изометрической проекции
         this.isoAngle = Math.atan(0.5);
@@ -125,6 +141,13 @@ class PIXIRenderer {
         // Оптимизация для большого количества объектов
         this.maxVisibleEntities = 200; // Максимальное количество видимых сущностей
         this.entityPool = []; // Пул для переиспользования спрайтов
+
+        // Пул для спрайтов предметов
+        this.itemSpritePool = []; // Пул для переиспользования ItemDropSprite
+        this.activeItemSprites = new Map(); // Активные спрайты предметов (ключ — drop объект)
+
+        // Кэш текстур для предметов
+        this.itemTextures = new Map();
     }
 
     /**
@@ -1891,87 +1914,6 @@ class PIXIRenderer {
     }
 
     /**
-     * Рендеринг выпавших предметов
-     * @param {Array} drops - массив выпавших предметов
-     * @param {Object} hoveredDrop - подсвеченный предмет
-     */
-    renderItems(drops, hoveredDrop = null) {
-        for (const drop of drops) {
-            if (drop.pickedUp) continue;
-
-            const isHovered = hoveredDrop && drop === hoveredDrop;
-
-            // Получаем canvas для получения размеров экрана
-            const canvas = this.app.view;
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-
-            // Преобразуем координаты предмета в экранные с учетом камеры и зума
-            const screenX = centerX + (drop.displayX - this.camera.x) * this.camera.zoom;
-            const screenY = centerY + (drop.displayY - this.camera.y) * this.camera.zoom;
-
-            // Размеры с учетом зума
-            const scaledWidth = drop.width * this.camera.zoom;
-            const scaledHeight = drop.height * this.camera.zoom;
-
-            // Создаем или обновляем спрайт предмета
-            let itemSprite = this.entitySprites.get(drop);
-            if (!itemSprite) {
-                // Создаем контейнер для предмета
-                itemSprite = new PIXI.Container();
-
-                // Создаем фон предмета
-                const background = new PIXI.Graphics();
-                itemSprite.addChild(background);
-
-                // Создаем рамку предмета
-                const border = new PIXI.Graphics();
-                itemSprite.addChild(border);
-
-                // Создаем текст названия предмета
-                const textColor = drop.item.getColorByRarity();
-                const text = new PIXI.Text(drop.item.name, {
-                    fontFamily: 'Arial',
-                    fontSize: 10 * this.camera.zoom,
-                    fill: this.hexToDecimal(textColor),
-                    align: 'center'
-                });
-                text.anchor.set(0.5);
-                itemSprite.addChild(text);
-
-                this.entitySprites.set(drop, itemSprite);
-                this.objectLayer.addChild(itemSprite);
-            }
-
-            // Обновляем позицию и масштаб
-            itemSprite.x = screenX;
-            itemSprite.y = screenY;
-            itemSprite.scale.set(1, 1); // Не масштабируем контейнер, так как текст уже масштабирован
-
-            // Обновляем фон
-            const background = itemSprite.children[0];
-            background.clear();
-            background.beginFill(0xFFFFFF, isHovered ? 0.4 : 0.2);
-            background.drawRect(-scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
-            background.endFill();
-
-            // Обновляем рамку
-            const border = itemSprite.children[1];
-            border.clear();
-            border.lineStyle(2 * this.camera.zoom, this.hexToDecimal(drop.item.getColorByRarity()));
-            border.drawRect(-scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
-
-            // Обновляем текст (пересоздаем если изменился размер или цвет)
-            const text = itemSprite.children[2];
-            if (text.text !== drop.item.name) {
-                text.text = drop.item.name;
-            }
-            text.position.set(screenX, screenY);
-            text.scale.set(this.camera.zoom, this.camera.zoom);
-        }
-    }
-
-    /**
      * Рендеринг врага
      * @param {Object} enemy - объект врага
      */
@@ -2610,7 +2552,112 @@ class PIXIRenderer {
             graphics.moveTo(0, y);
             graphics.lineTo(this.app.screen.width, y);
         }
+    }
 
-        
+    /**
+     * Инициализация текстур для предметов (ленивая загрузка)
+     */
+    initItemTextures() {
+        // Текстуры создаются динамически через ItemDropSprite
+        // Этот метод может использоваться для предварительной генерации если нужно
+    }
+
+    /**
+     * Рендеринг выпавших предметов
+     * @param {Array} drops - массив объектов ItemDrop
+     * @param {ItemDrop} hoveredDrop - подсвеченный предмет (или null)
+     */
+    renderItems(drops, hoveredDrop = null) {
+        const zoom = this.camera.zoom;
+
+        // Создаём множество активных drop объектов для быстрого поиска
+        const activeDropsSet = new Set(drops.filter(d => !d.pickedUp));
+
+        // Удаляем неактивные спрайты (предметы которые были подобраны или исчезли)
+        for (const [drop, sprite] of this.activeItemSprites.entries()) {
+            if (!activeDropsSet.has(drop)) {
+                // Предмет больше не активен - скрываем спрайт и возвращаем в пул
+                this.itemLayer.removeChild(sprite);
+                sprite.reset(); // Сбрасываем без уничтожения
+                this.activeItemSprites.delete(drop);
+                this.itemSpritePool.push(sprite);
+            }
+        }
+
+        // Рендерим активные предметы
+        for (const drop of drops) {
+            if (drop.pickedUp) continue;
+
+            // Вычисляем мировые координаты с учётом зума
+            // mainContainer уже имеет смещение камеры, поэтому используем только мировые координаты
+            const worldX = drop.displayX;
+            const worldY = drop.displayY;
+
+            // Проверяем, находится ли предмет в пределах видимой области (culling)
+            // Преобразуем мировые координаты в экранные для проверки
+            const screenX = this.app.screen.width / 2 + (worldX - this.camera.x) * zoom;
+            const screenY = this.app.screen.height / 2 + (worldY - this.camera.y) * zoom;
+            
+            const buffer = 100;
+            if (screenX < -buffer || screenX > this.app.screen.width + buffer ||
+                screenY < -buffer || screenY > this.app.screen.height + buffer) {
+                continue;
+            }
+
+            // Получаем или создаём спрайт для предмета
+            let sprite = this.activeItemSprites.get(drop);
+            if (!sprite) {
+                sprite = this.createItemSprite(drop);
+                this.activeItemSprites.set(drop, sprite);
+            }
+
+            // Обновляем состояние hover
+            sprite.isHovered = (hoveredDrop === drop);
+            sprite.updateVisuals();
+
+            // Обновляем позицию спрайта в мировых координатах с учётом зума
+            sprite.updatePosition(worldX, worldY, zoom);
+        }
+
+        // Сортируем предметы по Y для правильного наложения
+        this.itemLayer.sortableChildren = true;
+        for (const [drop, sprite] of this.activeItemSprites.entries()) {
+            sprite.zIndex = Math.floor(sprite.y);
+        }
+    }
+
+    /**
+     * Создание или получение из пула спрайта предмета
+     * @param {ItemDrop} drop - объект предмета
+     * @returns {ItemDropSprite} - спрайт предмета
+     */
+    createItemSprite(drop) {
+        let sprite;
+
+        // Пытаемся получить из пула
+        if (this.itemSpritePool.length > 0) {
+            sprite = this.itemSpritePool.pop();
+            sprite.reuse(drop); // Восстанавливаем спрайт с новым предметом
+        } else {
+            // Создаём новый спрайт
+            sprite = new ItemDropSprite(drop, this);
+        }
+
+        // Добавляем в слой предметов
+        this.itemLayer.addChild(sprite);
+
+        return sprite;
+    }
+
+    /**
+     * Очистка всех спрайтов предметов (например, при смене локации)
+     */
+    clearItemSprites() {
+        for (const [drop, sprite] of this.activeItemSprites.entries()) {
+            this.itemLayer.removeChild(sprite);
+            sprite.reset();
+            this.itemSpritePool.push(sprite);
+        }
+        this.activeItemSprites.clear();
     }
 }
