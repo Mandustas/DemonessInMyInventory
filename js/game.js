@@ -20,6 +20,9 @@ class Game {
 
         this.enemies = [];
 
+        // Система выпадения предметов
+        this.itemDropSystem = new ItemDropSystem();
+
         // Состояние игры
         this.gameState = 'playing';
 
@@ -49,6 +52,9 @@ class Game {
 
         // Создаем систему боевых эффектов
         this.combatEffects = new CombatEffectsSystem(this.renderer);
+
+        // Переменная для отслеживания подсвеченного предмета
+        this.hoveredItemDrop = null;
 
         // Устанавливаем обработчик изменения уровня персонажа
         this.character.onLevelChanged = (level, x, y) => {
@@ -127,13 +133,18 @@ class Game {
             this.handleClick(e);
         });
 
+        // Обработка движения мыши для подсветки предметов
+        this.renderer.canvas.addEventListener('mousemove', (e) => {
+            this.handleMouseMove(e);
+        });
+
         // Обработка контекстного меню (для правого клика)
         this.renderer.canvas.addEventListener('contextmenu', (e) => {
             if (GAME_CONFIG.DEBUG.TELEPORT_ON_RIGHT_CLICK) {
                 e.preventDefault(); // Предотвращаем контекстное меню при включенной отладке телепортации
             }
         });
-        
+
         // Обработка зуммирования колесиком мыши
         this.renderer.canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
@@ -317,7 +328,7 @@ class Game {
         // Проверяем, включена ли отладка телепортации по правому клику
         if (GAME_CONFIG.DEBUG.TELEPORT_ON_RIGHT_CLICK && e.button === 2) { // Правая кнопка мыши
             e.preventDefault(); // Предотвращаем контекстное меню
-            
+
             // Телепортируем персонажа в точку клика
             this.teleportTo(worldX, worldY);
             return;
@@ -343,11 +354,81 @@ class Game {
                 }
             }
         } else {
-            // Перемещаем персонажа к точке клика
-            this.moveTo(worldX, worldY);
+            // Проверяем, был ли клик по выпавшему предмету
+            if (e.button === 0) { // Левая кнопка мыши
+                // Если есть подсвеченный предмет, пытаемся его подобрать
+                if (this.hoveredItemDrop) {
+                    const pickedUp = this.hoveredItemDrop.pickup(this.character);
+                    if (pickedUp) {
+                        console.log('Подобран подсвеченный предмет по клику');
+                    } else {
+                        // Если не удалось подобрать подсвеченный предмет, пробуем обычный способ
+                        const pickedUpAtCoords = this.itemDropSystem.tryPickupAt(worldX, worldY, this.character);
+                        
+                        if (!pickedUpAtCoords) {
+                            // Если не подобрали предмет по точным координатам клика, пробуем подобрать ближайший
+                            const nearestPickedUp = this.itemDropSystem.tryPickupNearest(this.character);
+                            
+                            if (!nearestPickedUp) {
+                                // Если и ближайший не подобрали, перемещаем персонажа к точке клика
+                                this.moveTo(worldX, worldY);
+                            } else {
+                                console.log('Подобран ближайший предмет по клику');
+                            }
+                        } else {
+                            console.log('Подобран предмет по точным координатам клика');
+                        }
+                    }
+                } else {
+                    // Если нет подсвеченного предмета, используем старую логику
+                    const pickedUp = this.itemDropSystem.tryPickupAt(worldX, worldY, this.character);
+                    
+                    // Если не подобрали предмет по точным координатам клика, пробуем подобрать ближайший
+                    if (!pickedUp) {
+                        // Проверяем, есть ли ближайшие предметы в радиусе pickup
+                        const nearestPickedUp = this.itemDropSystem.tryPickupNearest(this.character);
+                        
+                        if (!nearestPickedUp) {
+                            // Если и ближайший не подобрали, перемещаем персонажа к точке клика
+                            this.moveTo(worldX, worldY);
+                        } else {
+                            console.log('Подобран ближайший предмет по клику');
+                        }
+                    } else {
+                        console.log('Подобран предмет по точным координатам клика');
+                    }
+                }
+            } else {
+                // Перемещаем персонажа к точке клика
+                this.moveTo(worldX, worldY);
+            }
         }
     }
-    
+
+    /**
+     * Обработка движения мыши
+     */
+    handleMouseMove(e) {
+        if (this.gameState !== 'playing') return;
+
+        const rect = this.renderer.canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // Получаем предмет под курсором
+        const hoveredDrop = this.itemDropSystem.getDropAtPoint(mouseX, mouseY, this.renderer);
+
+        // Обновляем подсвеченный предмет
+        this.hoveredItemDrop = hoveredDrop;
+
+        // Меняем курсор в зависимости от того, находится ли курсор над предметом
+        if (hoveredDrop) {
+            this.renderer.canvas.style.cursor = 'pointer'; // Меняем курсор на указатель при наведении на предмет
+        } else {
+            this.renderer.canvas.style.cursor = 'default'; // Возвращаем стандартный курсор
+        }
+    }
+
     /**
      * Получение врага в позиции
      * @param {number} x - координата X
@@ -595,13 +676,98 @@ class Game {
     dropRandomItem(x, y) {
         // Генерируем случайный предмет
         const randomItem = generateRandomItem(this.character.level);
-        
+
         // Добавляем предмет в инвентарь персонажа
         if (!this.character.addToInventory(randomItem)) {
             console.log('Инвентарь полон, предмет исчез');
         } else {
             console.log(`Получен предмет: ${randomItem.name} (${randomItem.rarity})`);
         }
+    }
+
+    /**
+     * Выпадение предметов с врага
+     * @param {Enemy} enemy - враг, с которого выпадают предметы
+     */
+    dropItemsFromEnemy(enemy) {
+        // Определяем количество предметов, которые могут выпасть (до 3)
+        const maxDrops = 3;
+        const strengthFactor = this.getMonsterStrengthFactor(enemy);
+        
+        // Базовый шанс выпадения предмета
+        let baseDropChance = 0.3;
+        
+        // Увеличиваем шанс выпадения в зависимости от силы врага
+        baseDropChance *= strengthFactor;
+        
+        // Максимальное количество выпадающих предметов зависит от силы врага
+        const maxPossibleDrops = Math.min(maxDrops, Math.ceil(strengthFactor));
+        
+        // Выбираем количество предметов для выпадения
+        const numDrops = Math.min(maxPossibleDrops, Math.max(1, Math.floor(Math.random() * maxPossibleDrops) + 1));
+        
+        for (let i = 0; i < numDrops; i++) {
+            // Проверяем шанс выпадения для каждого предмета
+            if (Math.random() < baseDropChance) {
+                // Генерируем предмет с учетом силы врага
+                const item = this.generateItemBasedOnEnemy(enemy);
+                
+                // Создаем выпавший предмет на земле
+                this.itemDropSystem.createItemDrop(item, enemy.x, enemy.y);
+                
+                console.log(`Выпал предмет: ${item.name} (${item.rarity}) с врага ${enemy.type}`);
+            }
+        }
+    }
+
+    /**
+     * Генерация предмета с учетом силы врага
+     * @param {Enemy} enemy - враг, с которого выпадает предмет
+     * @returns {Item} - сгенерированный предмет
+     */
+    generateItemBasedOnEnemy(enemy) {
+        const strengthFactor = this.getMonsterStrengthFactor(enemy);
+        
+        // Увеличиваем уровень предмета в зависимости от силы врага
+        const itemLevel = Math.max(1, Math.floor(this.character.level * strengthFactor));
+        
+        // Генерируем случайный предмет
+        const item = generateRandomItem(itemLevel);
+        
+        // Улучшаем редкость предмета в зависимости от силы врага
+        if (strengthFactor > 1.5 && Math.random() < 0.1) {
+            // Повышаем редкость до эпической для очень сильных врагов
+            item.rarity = 'epic';
+        } else if (strengthFactor > 1.2 && Math.random() < 0.2) {
+            // Повышаем редкость до редкой для сильных врагов
+            item.rarity = 'rare';
+        } else if (strengthFactor > 1.0 && Math.random() < 0.3) {
+            // Повышаем редкость до необычной для средних врагов
+            item.rarity = 'uncommon';
+        }
+        
+        // Пересчитываем стоимость предмета с учетом новой редкости
+        item.value = item.calculateValue();
+        
+        return item;
+    }
+
+    /**
+     * Получение фактора силы врага
+     * @param {Enemy} enemy - враг
+     * @returns {number} - фактор силы (1.0 для базового врага)
+     */
+    getMonsterStrengthFactor(enemy) {
+        // Базовые характеристики для сравнения
+        const baseHealth = GAME_CONFIG.ENEMY.TYPES.BASIC.maxHealth;
+        const baseDamage = GAME_CONFIG.ENEMY.TYPES.BASIC.damage;
+        
+        // Рассчитываем общий показатель силы врага
+        const healthFactor = enemy.stats.maxHealth / baseHealth;
+        const damageFactor = enemy.damage / baseDamage;
+        
+        // Взвешиваем факторы (здоровье важнее урона)
+        return (healthFactor * 0.6 + damageFactor * 0.4);
     }
     
     /**
@@ -650,7 +816,7 @@ class Game {
         const currentTilePos = getTileIndex(this.character.x, this.character.y);
         const currentChunkX = Math.floor(currentTilePos.tileX / this.chunkSystem.chunkSize);
         const currentChunkY = Math.floor(currentTilePos.tileY / this.chunkSystem.chunkSize);
-        
+
         if (this.lastChunkX !== currentChunkX || this.lastChunkY !== currentChunkY) {
             this.lastChunkX = currentChunkX;
             this.lastChunkY = currentChunkY;
@@ -680,15 +846,16 @@ class Game {
                 // Добавляем опыт за убийство
                 this.character.gainExperience(enemy.stats.maxHealth / 2);
 
-                // Добавляем случайный предмет
-                if (Math.random() < 0.3) {
-                    this.dropRandomItem(enemy.x, enemy.y);
-                }
+                // Добавляем случайные предметы с врага
+                this.dropItemsFromEnemy(enemy);
 
                 // Удаляем мертвого врага
                 this.enemies.splice(i, 1);
             }
         }
+
+        // Обновляем систему выпадения предметов
+        this.itemDropSystem.update();
 
         // Обновляем восстановление маны
         this.character.regenerateMana();
@@ -888,7 +1055,7 @@ class Game {
     render() {
         // Очищаем холст
         this.renderer.clear();
-        
+
         // Обновляем плавный зум
         this.renderer.updateZoom();
 
@@ -900,6 +1067,9 @@ class Game {
 
         // Рендерим все объекты с учетом глубины
         this.renderer.renderWithDepth(allRenderables, (obj) => obj.render());
+
+        // Рендерим выпавшие предметы
+        this.itemDropSystem.render(this.renderer, this.hoveredItemDrop);
 
         // Обновляем миникарту
         this.minimap.update();
