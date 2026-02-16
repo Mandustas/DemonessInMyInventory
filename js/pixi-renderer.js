@@ -82,33 +82,33 @@ class PIXIRenderer {
         // Создаем тайлсеты для различных типов тайлов
         this.tileTextures = new Map();
         this.generateTileTextures();
-        
+
         // Кэш для чанков, чтобы избежать повторной генерации
         this.chunkCache = new Map();
-        
+
         // Текстуры для персонажей и врагов
         this.entityTextures = new Map();
         this.generateEntityTextures();
-        
+
         // Анимации для сущностей
         this.animations = new Map();
         this.animationFrame = 0;
-        
+
         // Для сортировки по глубине
         this.objectLayer.sortableChildren = true;
-        
+
         // Спрятанный канвас для создания спрайтшитов
         this.spriteSheetCanvas = document.createElement('canvas');
         this.spriteSheetCanvas.width = 1024;
         this.spriteSheetCanvas.height = 1024;
         this.spriteSheetCtx = this.spriteSheetCanvas.getContext('2d');
-        
+
         // Текстуры спрайтшита
         this.spriteSheetTextures = new Map();
-        
+
         // Для culling (отсечение невидимых объектов)
         this.viewBounds = new PIXI.Rectangle(0, 0, this.app.screen.width, this.app.screen.height);
-        
+
         // Слой для частиц
         this.particleLayer = new PIXI.ParticleContainer(10000, {
             scale: true,
@@ -118,10 +118,10 @@ class PIXIRenderer {
             alpha: true
         });
         this.mainContainer.addChild(this.particleLayer);
-        
+
         // Система частиц
         this.particles = [];
-        
+
         // Оптимизация для большого количества объектов
         this.maxVisibleEntities = 200; // Максимальное количество видимых сущностей
         this.entityPool = []; // Пул для переиспользования спрайтов
@@ -162,7 +162,7 @@ class PIXIRenderer {
      */
     createPlayerTexture(size) {
         const graphics = new PIXI.Graphics();
-        
+
         // Тело персонажа (изометрический ромб)
         graphics.beginFill(this.hexToDecimal(this.colors.player));
         this.drawIsometricEntity(graphics, 0, 0, size.width * 0.8, size.height * 0.6);
@@ -181,7 +181,6 @@ class PIXIRenderer {
         // Обводка головы
         graphics.lineStyle(2, 0xd6bba0);
         graphics.drawCircle(0, -15, size.width * 0.25);
-        graphics.stroke();
 
         // Глаза
         graphics.beginFill(0x000000);
@@ -193,7 +192,6 @@ class PIXIRenderer {
         graphics.lineStyle(3, 0xc0c0c0); // Серебристый
         graphics.moveTo(10, -10);
         graphics.lineTo(20, -20);
-        graphics.stroke();
 
         // Рукоять меча
         graphics.beginFill(0x8b4513); // Коричневый
@@ -355,7 +353,6 @@ class PIXIRenderer {
                         graphics.moveTo(10, -10);
                         graphics.lineTo(20, -20);
                     }
-                    graphics.stroke();
                     break;
                     
                 case 'hurt':
@@ -389,8 +386,7 @@ class PIXIRenderer {
             // Обводка головы
             graphics.lineStyle(2, 0xd6bba0);
             graphics.drawCircle(0, -15, size.width * 0.25);
-            graphics.stroke();
-            
+
             // Глаза
             graphics.beginFill(0x000000);
             graphics.drawCircle(-4, -16, 2);
@@ -584,7 +580,6 @@ class PIXIRenderer {
         graphics.lineTo(0, tileSize / 4);
         graphics.lineTo(-tileSize / 4, tileSize / 8);
         graphics.closePath();
-        graphics.fill();
         
         graphics.endFill();
 
@@ -595,7 +590,6 @@ class PIXIRenderer {
         graphics.lineTo(0, tileSize / 2);
         graphics.lineTo(-tileSize / 2, tileSize / 4);
         graphics.closePath();
-        graphics.stroke();
 
         // Создаем текстуру из графики
         return this.app.renderer.generateTexture(graphics);
@@ -631,7 +625,6 @@ class PIXIRenderer {
                     graphics.lineTo(brickX, brickY + brickHeight);
                     graphics.lineTo(brickX - brickWidth / 2, brickY + brickHeight / 2);
                     graphics.closePath();
-                    graphics.fill();
                 }
             }
         }
@@ -645,7 +638,6 @@ class PIXIRenderer {
         graphics.lineTo(0, tileSize / 2);
         graphics.lineTo(-tileSize / 2, tileSize / 4);
         graphics.closePath();
-        graphics.stroke();
 
         return this.app.renderer.generateTexture(graphics);
     }
@@ -670,7 +662,6 @@ class PIXIRenderer {
         graphics.lineTo(0, tileSize * 0.2);
         graphics.lineTo(-tileSize * 0.2, tileSize * 0.05);
         graphics.closePath();
-        graphics.fill();
         graphics.endFill();
 
         // Верхушка колонны
@@ -680,7 +671,6 @@ class PIXIRenderer {
         graphics.lineTo(0, tileSize * 0.1);
         graphics.lineTo(-tileSize * 0.25, -tileSize * 0.05);
         graphics.closePath();
-        graphics.fill();
         graphics.endFill();
 
         // Обводка для контраста
@@ -690,7 +680,6 @@ class PIXIRenderer {
         graphics.lineTo(0, tileSize / 2);
         graphics.lineTo(-tileSize / 2, tileSize / 4);
         graphics.closePath();
-        graphics.stroke();
 
         return this.app.renderer.generateTexture(graphics);
     }
@@ -715,7 +704,6 @@ class PIXIRenderer {
         graphics.lineTo(0, tileSize * 0.3);
         graphics.lineTo(-tileSize * 0.2, tileSize * 0.2);
         graphics.closePath();
-        graphics.fill();
         graphics.endFill();
 
         // Крона дерева
@@ -735,7 +723,6 @@ class PIXIRenderer {
         // Обводка для контраста
         graphics.lineStyle(1, 0x2a5a2a);
         graphics.drawCircle(0, -tileSize * 0.3, tileSize * 0.4);
-        graphics.stroke();
 
         return this.app.renderer.generateTexture(graphics);
     }
@@ -762,14 +749,12 @@ class PIXIRenderer {
         graphics.lineTo(0, tileSize * 0.2);
         graphics.lineTo(-tileSize * 0.15, tileSize * 0.05);
         graphics.closePath();
-        graphics.fill();
 
         graphics.moveTo(-tileSize * 0.2, tileSize * 0.1);
         graphics.lineTo(-tileSize * 0.05, tileSize * 0.25);
         graphics.lineTo(-tileSize * 0.15, tileSize * 0.35);
         graphics.lineTo(-tileSize * 0.3, tileSize * 0.2);
         graphics.closePath();
-        graphics.fill();
 
         graphics.endFill();
 
@@ -780,7 +765,6 @@ class PIXIRenderer {
         graphics.lineTo(0, tileSize / 2);
         graphics.lineTo(-tileSize / 2, tileSize / 4);
         graphics.closePath();
-        graphics.stroke();
 
         return this.app.renderer.generateTexture(graphics);
     }
@@ -823,7 +807,6 @@ class PIXIRenderer {
         graphics.lineTo(0, tileSize / 2);
         graphics.lineTo(-tileSize / 2, tileSize / 4);
         graphics.closePath();
-        graphics.stroke();
 
         return this.app.renderer.generateTexture(graphics);
     }
@@ -855,7 +838,6 @@ class PIXIRenderer {
         graphics.moveTo(-tileSize * 0.2, 0);
         graphics.lineTo(tileSize * 0.1, -tileSize * 0.1);
         graphics.lineTo(tileSize * 0.2, tileSize * 0.1);
-        graphics.stroke();
 
         // Обводка для контраста
         graphics.lineStyle(1, 0x90caf9);
@@ -864,7 +846,6 @@ class PIXIRenderer {
         graphics.lineTo(0, tileSize / 2);
         graphics.lineTo(-tileSize / 2, tileSize / 4);
         graphics.closePath();
-        graphics.stroke();
 
         return this.app.renderer.generateTexture(graphics);
     }
@@ -902,7 +883,6 @@ class PIXIRenderer {
         // Обводка для контраста
         graphics.lineStyle(1, 0x689f38);
         graphics.drawCircle(0, 0, tileSize * 0.15);
-        graphics.stroke();
 
         return this.app.renderer.generateTexture(graphics);
     }
@@ -1500,7 +1480,6 @@ class PIXIRenderer {
         graphics.lineTo(x, y + height);
         graphics.lineTo(x - width / 2, y + height / 2);
         graphics.closePath();
-        graphics.fill();
     }
 
     /**
@@ -1642,12 +1621,12 @@ class PIXIRenderer {
      * @param {number} height - высота
      */
     drawIsometricEntity(graphics, x, y, width, height) {
+        // Рисуем основную форму ромба
         graphics.moveTo(x, y);
         graphics.lineTo(x + width / 2, y + height / 2);
         graphics.lineTo(x, y + height);
         graphics.lineTo(x - width / 2, y + height / 2);
         graphics.closePath();
-        graphics.fill();
 
         // Легкая тень для объема
         graphics.beginFill(0x000000, 0.2);
@@ -1656,7 +1635,6 @@ class PIXIRenderer {
         graphics.lineTo(x - width / 4, y + height * 0.75);
         graphics.lineTo(x - width / 2, y + height / 2);
         graphics.closePath();
-        graphics.fill();
         graphics.endFill();
     }
 
@@ -2203,6 +2181,6 @@ class PIXIRenderer {
             graphics.lineTo(this.app.screen.width, y);
         }
 
-        graphics.stroke();
+        
     }
 }
