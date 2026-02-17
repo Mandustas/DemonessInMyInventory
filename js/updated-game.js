@@ -904,7 +904,7 @@ class Game {
         this.levelUpEffect.update(deltaTime);
 
         // Обновляем боевые эффекты
-        this.combatEffects.update();
+        this.combatEffects.update(deltaTime);
 
         // Обновляем UI каждый кадр для отзывчивости
         this.updateCharacterUI();
@@ -1128,7 +1128,7 @@ class Game {
         this.levelUpEffect.render(deltaTime);
 
         // Рендерим боевые эффекты
-        this.combatEffects.render();
+        this.combatEffects.render(deltaTime);
 
         // При необходимости рендерим сетку (для отладки)
         // this.renderer.renderGrid();

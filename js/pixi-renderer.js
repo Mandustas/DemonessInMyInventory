@@ -85,6 +85,16 @@ class PIXIRenderer {
         });
         this.mainContainer.addChild(this.particleLayer);
 
+        // Слой для частиц боевых эффектов (отдельный слой для избежания конфликтов)
+        this.combatParticleLayer = new PIXI.ParticleContainer(10000, {
+            scale: true,
+            position: true,
+            rotation: true,
+            uvs: true,
+            alpha: true
+        });
+        this.mainContainer.addChild(this.combatParticleLayer);
+
         // Слой для предметов (над частицами, под UI)
         this.itemLayer = new PIXI.Container();
         this.itemLayer.eventMode = 'passive'; // Пропускаем события через контейнер, но обрабатываем на детях
@@ -149,6 +159,9 @@ class PIXIRenderer {
 
         // Эффекты получения уровня
         this.levelUpEffects = []; // Массив эффектов уровня (частицы + текст)
+
+        // Эффекты боя (частицы + текст + вспышки)
+        this.combatEffects = []; // Массив боевых эффектов
     }
 
     /**
@@ -2496,6 +2509,9 @@ class PIXIRenderer {
                 textSprite.scale.set(effect.scale);
                 textSprite.alpha = effect.alpha;
                 textSprite.visible = true;
+                
+                // Помечаем как текст уровня для очистки
+                textSprite.isLevelUpText = true;
 
                 // Центрируем текст
                 if (textSprite.textObj) {
@@ -2514,14 +2530,21 @@ class PIXIRenderer {
      * Очистка старых спрайтов эффектов перед новым кадром
      */
     _cleanupLevelUpSprites() {
-        // Очищаем все спрайты частиц из particleLayer
+        // Возвращаем все спрайты частиц из particleLayer в пул и сбрасываем их
+        for (const child of this.particleLayer.children) {
+            child.visible = false;
+            child.alpha = 1;
+            child.scale.set(1);
+            this.particleSpritePool.push(child);
+        }
         this.particleLayer.removeChildren();
-        
-        // Очищаем только текстовые спрайты из uiLayer (не трогаем другие UI элементы)
+
+        // Очищаем только текстовые спрайты level-up эффектов из uiLayer
         for (let i = this.uiLayer.children.length - 1; i >= 0; i--) {
             const child = this.uiLayer.children[i];
-            if (child.textObj) {
+            if (child.textObj && child.isLevelUpText) {
                 this.uiLayer.removeChild(child);
+                child.visible = false;
                 this.textSpritePool.push(child);
             }
         }
@@ -2535,18 +2558,21 @@ class PIXIRenderer {
         if (this.particleSpritePool.length > 0) {
             const sprite = this.particleSpritePool.pop();
             sprite.visible = true;
+            sprite.alpha = 1;
+            sprite.scale.set(1);
+            sprite.tint = 0xFFFFFF;
             return sprite;
         }
-        
-        // Создаем новый спрайт частицы (простой квадрат)
+
+        // Создаем новый спрайт частицы (простой круг)
         const graphics = new PIXI.Graphics();
         graphics.beginFill(0xFFFFFF);
         graphics.drawCircle(0, 0, 1); // Единичный круг, масштабирование будет через sprite.scale
         graphics.endFill();
-        
+
         const texture = this.app.renderer.generateTexture(graphics);
         graphics.destroy();
-        
+
         return new PIXI.Sprite(texture);
     }
 
@@ -2558,9 +2584,14 @@ class PIXIRenderer {
         if (this.textSpritePool.length > 0) {
             const container = this.textSpritePool.pop();
             container.visible = true;
+            container.alpha = 1;
+            container.scale.set(1);
+            // Сбрасываем флаги
+            container.isCombatText = false;
+            container.isLevelUpText = false;
             return container;
         }
-        
+
         // Создаем новый контейнер для текста
         const container = new PIXI.Container();
         return container;
@@ -2570,18 +2601,25 @@ class PIXIRenderer {
      * Очистка пулов спрайтов эффектов
      */
     clearLevelUpEffects() {
-        // Возвращаем все спрайты частиц в пул
+        // Возвращаем все спрайты частиц из particleLayer в пул
         for (const child of this.particleLayer.children) {
+            child.visible = false;
+            child.alpha = 1;
+            child.scale.set(1);
             this.particleSpritePool.push(child);
         }
-        
-        // Возвращаем все текстовые спрайты в пул
-        for (const child of this.uiLayer.children) {
-            if (child.textObj) {
+        this.particleLayer.removeChildren();
+
+        // Возвращаем все текстовые спрайты level-up из uiLayer в пул
+        for (let i = this.uiLayer.children.length - 1; i >= 0; i--) {
+            const child = this.uiLayer.children[i];
+            if (child.textObj && child.isLevelUpText) {
+                this.uiLayer.removeChild(child);
+                child.visible = false;
                 this.textSpritePool.push(child);
             }
         }
-        
+
         // Очищаем массив эффектов
         this.levelUpEffects = [];
     }
@@ -2592,6 +2630,423 @@ class PIXIRenderer {
      */
     hasActiveLevelUpEffects() {
         return this.levelUpEffects.length > 0;
+    }
+
+    /**
+     * Создание частицы для боевого эффекта
+     * @param {number} x - X координата в мировых координатах
+     * @param {number} y - Y координата в мировых координатах
+     * @param {string} color - HEX цвет частицы
+     * @param {number} size - размер частицы
+     * @param {number} vx - скорость по X
+     * @param {number} vy - скорость по Y
+     * @param {number} lifetime - время жизни в миллисекундах
+     * @param {string} subtype - подтип частицы ('damage', 'critical', 'dodge')
+     */
+    createCombatParticle(x, y, color, size, vx, vy, lifetime, subtype = 'damage') {
+        const particle = {
+            x,
+            y,
+            color: this.hexToDecimal(color),
+            size,
+            velocityX: vx,
+            velocityY: vy,
+            lifetime,
+            age: 0,
+            alpha: 1,
+            type: 'combat_particle',
+            subtype
+        };
+
+        this.combatEffects.push(particle);
+        return particle;
+    }
+
+    /**
+     * Создание текстового эффекта для боя
+     * @param {number} x - X координата в мировых координатах
+     * @param {number} y - Y координата в мировых координатах
+     * @param {string} text - текст для отображения
+     * @param {number} fontSize - размер шрифта
+     * @param {string} color - HEX цвет текста
+     * @param {number} lifetime - время жизни в миллисекундах
+     * @param {string} subtype - подтип текста ('damage', 'critical', 'miss')
+     */
+    createCombatText(x, y, text, fontSize, color, lifetime, subtype = 'damage') {
+        const textEffect = {
+            x,
+            y,
+            startY: y,
+            text,
+            fontSize,
+            color: this.hexToDecimal(color),
+            lifetime,
+            age: 0,
+            alpha: 1,
+            scale: 1.0,
+            type: 'combat_text',
+            subtype
+        };
+
+        this.combatEffects.push(textEffect);
+        return textEffect;
+    }
+
+
+
+    /**
+     * Создание текстуры для вспышки (круглая с градиентом)
+     * @returns {PIXI.Texture} - текстура вспышки
+     */
+    _createFlashTexture() {
+        // Проверяем, есть ли уже готовая текстура в кэше
+        if (this.flashTextureCache) {
+            return this.flashTextureCache;
+        }
+
+        // Создаём canvas для рисования круглой вспышки с градиентом
+        const canvas = document.createElement('canvas');
+        const size = 64;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        // Рисуем круг с радиальным градиентом (от центра к краям)
+        const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.8)');
+        gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.3)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(size/2, size/2, size/2, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Создаём текстуру из canvas
+        const baseTexture = new PIXI.BaseTexture(canvas);
+        const texture = new PIXI.Texture(baseTexture);
+        
+        this.flashTextureCache = texture;
+        return texture;
+    }
+
+    /**
+     * Запуск эффекта урона
+     * @param {number} x - X координата центра эффекта
+     * @param {number} y - Y координата центра эффекта
+     * @param {number} damage - количество урона
+     */
+    triggerDamageEffect(x, y, damage) {
+        // Текст урона
+        this.createCombatText(
+            x, y - 20,
+            `${damage}`,
+            18,
+            '#FF0000',
+            1000, // 1 секунда
+            'damage'
+        );
+
+        // Частицы урона (красные)
+        for (let i = 0; i < 8; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 1 + Math.random() * 2;
+            const size = 2 + Math.random() * 3;
+
+            this.createCombatParticle(
+                x, y,
+                '#FF0000',
+                size,
+                Math.cos(angle) * speed,
+                Math.sin(angle) * speed,
+                500 + Math.random() * 500, // 0.5-1 секунда
+                'damage'
+            );
+        }
+    }
+
+    /**
+     * Запуск эффекта критического удара
+     * @param {number} x - X координата центра эффекта
+     * @param {number} y - Y координата центра эффекта
+     * @param {number} damage - количество урона
+     */
+    triggerCriticalEffect(x, y, damage) {
+        // Текст критического урона
+        this.createCombatText(
+            x, y - 30,
+            `${damage}!`,
+            24,
+            '#FFFF00',
+            1500, // 1.5 секунды
+            'critical'
+        );
+
+        // Частицы крита (жёлтые)
+        for (let i = 0; i < 15; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 2 + Math.random() * 3;
+            const size = 3 + Math.random() * 4;
+
+            this.createCombatParticle(
+                x, y,
+                '#FFFF00',
+                size,
+                Math.cos(angle) * speed,
+                Math.sin(angle) * speed,
+                800 + Math.random() * 800, // 0.8-1.6 секунды
+                'critical'
+            );
+        }
+    }
+
+    /**
+     * Запуск эффекта уворота (MISS)
+     * @param {number} x - X координата центра эффекта
+     * @param {number} y - Y координата центра эффекта
+     */
+    triggerDodgeEffect(x, y) {
+        // Текст "MISS"
+        this.createCombatText(
+            x, y - 20,
+            'MISS',
+            20,
+            '#808080',
+            1000, // 1 секунда
+            'miss'
+        );
+
+        // Частицы уворота (серые)
+        for (let i = 0; i < 5; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 1 + Math.random() * 1.5;
+            const size = 1 + Math.random() * 2;
+
+            this.createCombatParticle(
+                x, y,
+                '#808080',
+                size,
+                Math.cos(angle) * speed,
+                Math.sin(angle) * speed,
+                400 + Math.random() * 400, // 0.4-0.8 секунды
+                'dodge'
+            );
+        }
+    }
+
+    /**
+     * Обновление боевых эффектов
+     * @param {number} deltaTime - время с последнего обновления в миллисекундах
+     */
+    updateCombatEffects(deltaTime) {
+        for (let i = this.combatEffects.length - 1; i >= 0; i--) {
+            const effect = this.combatEffects[i];
+            effect.age += deltaTime;
+
+            if (effect.type === 'combat_flash') {
+                // Увеличиваем размер вспышки
+                effect.size = Math.min(effect.size * effect.growthRate, effect.maxSize);
+                // Обновляем прозрачность
+                effect.alpha = 1 - (effect.age / effect.lifetime);
+            } else if (effect.type === 'combat_particle') {
+                // Обновляем позицию частицы
+                effect.x += effect.velocityX;
+                effect.y += effect.velocityY;
+
+                // Добавляем гравитацию
+                effect.velocityY += 0.1;
+
+                // Уменьшаем скорость из-за трения
+                effect.velocityX *= 0.98;
+                effect.velocityY *= 0.98;
+
+                // Обновляем прозрачность
+                effect.alpha = 1 - (effect.age / effect.lifetime);
+            } else if (effect.type === 'combat_text') {
+                // Для текста увеличиваем масштаб в начале и уменьшаем к концу
+                const lifeRatio = 1 - (effect.age / effect.lifetime);
+                if (lifeRatio > 0.7) {
+                    effect.scale = 1 + (0.5 * (1 - (lifeRatio - 0.7) / 0.3));
+                } else {
+                    effect.scale = 1.5 - (0.5 * (1 - lifeRatio / 0.7));
+                }
+
+                // Поднимаем текст вверх
+                effect.y -= 0.5;
+
+                // Обновляем прозрачность
+                effect.alpha = lifeRatio;
+            }
+
+            // Удаляем эффект, если время жизни истекло
+            if (effect.age >= effect.lifetime) {
+                this.combatEffects.splice(i, 1);
+            }
+        }
+    }
+
+    /**
+     * Отрисовка боевых эффектов на PIXI слоях
+     */
+    renderCombatEffects() {
+        if (this.combatEffects.length === 0) {
+            return;
+        }
+
+        // Сначала очищаем старые спрайты эффектов
+        this._cleanupCombatSprites();
+
+        // Рендерим частицы и вспышки
+        for (const effect of this.combatEffects) {
+            if (effect.type === 'combat_particle' || effect.type === 'combat_flash') {
+                // Используем мировые координаты напрямую
+                const worldX = effect.x;
+                const worldY = effect.y;
+
+                let sprite;
+
+                if (effect.type === 'combat_flash') {
+                    // Для вспышки используем специальную текстуру и создаём спрайт отдельно
+                    if (!effect.flashSprite) {
+                        // Создаём новый спрайт с текстурой вспышки
+                        effect.flashSprite = new PIXI.Sprite(effect.texture);
+                        effect.flashSprite.anchor.set(0.5); // Центрируем текстуру
+                    }
+                    sprite = effect.flashSprite;
+                    sprite.x = worldX;
+                    sprite.y = worldY;
+                    // Масштабируем относительно размера текстуры (64px)
+                    const scale = effect.size / 64;
+                    sprite.scale.set(scale);
+                    sprite.alpha = effect.alpha;
+                    sprite.tint = effect.color;
+                    sprite.visible = true;
+                } else {
+                    // Для частицы используем пул
+                    sprite = this._getParticleSpriteFromPool();
+                    sprite.x = worldX;
+                    sprite.y = worldY;
+                    sprite.scale.set(effect.size * effect.alpha);
+                    sprite.alpha = effect.alpha;
+                    sprite.tint = effect.color;
+                    sprite.visible = true;
+                }
+
+                // Добавляем в combatParticleLayer если еще не добавлен
+                if (!sprite.parent) {
+                    this.combatParticleLayer.addChild(sprite);
+                }
+            }
+        }
+
+        // Рендерим текст
+        for (const effect of this.combatEffects) {
+            if (effect.type === 'combat_text') {
+                // Используем мировые координаты напрямую
+                const worldX = effect.x;
+                const worldY = effect.y;
+
+                // Получаем или создаем текстовый спрайт
+                let textSprite = this._getTextSpriteFromPool();
+
+                // Обновляем текст
+                if (!textSprite.textObj) {
+                    textSprite.textObj = new PIXI.Text(effect.text, {
+                        fontSize: effect.fontSize,
+                        fontFamily: "'MedievalSharp', Arial, sans-serif",
+                        fill: effect.color,
+                        fontWeight: 'bold'
+                    });
+                    textSprite.addChild(textSprite.textObj);
+                } else {
+                    textSprite.textObj.text = effect.text;
+                    textSprite.textObj.style.fontSize = effect.fontSize;
+                    textSprite.textObj.style.fill = effect.color;
+                    textSprite.textObj.updateText();
+                }
+
+                // Позиционируем и масштабируем
+                textSprite.x = worldX;
+                textSprite.y = worldY;
+                textSprite.scale.set(effect.scale);
+                textSprite.alpha = effect.alpha;
+                textSprite.visible = true;
+                
+                // Помечаем как боевой текст для очистки
+                textSprite.isCombatText = true;
+
+                // Центрируем текст
+                if (textSprite.textObj) {
+                    textSprite.textObj.anchor.set(0.5);
+                }
+
+                // Добавляем в uiLayer если еще не добавлен
+                if (!textSprite.parent) {
+                    this.uiLayer.addChild(textSprite);
+                }
+            }
+        }
+    }
+
+    /**
+     * Очистка старых спрайтов боевых эффектов перед новым кадром
+     */
+    _cleanupCombatSprites() {
+        // Возвращаем все спрайты частиц из combatParticleLayer в пул и сбрасываем их
+        for (const child of this.combatParticleLayer.children) {
+            child.visible = false;
+            child.alpha = 1;
+            child.scale.set(1);
+            this.particleSpritePool.push(child);
+        }
+        this.combatParticleLayer.removeChildren();
+
+        // Очищаем только текстовые спрайты боевых эффектов из uiLayer
+        // (не трогаем другие UI элементы и тексты level-up эффектов)
+        for (let i = this.uiLayer.children.length - 1; i >= 0; i--) {
+            const child = this.uiLayer.children[i];
+            if (child.textObj && child.isCombatText) {
+                this.uiLayer.removeChild(child);
+                child.visible = false;
+                this.textSpritePool.push(child);
+            }
+        }
+    }
+
+    /**
+     * Проверка, есть ли активные боевые эффекты
+     * @returns {boolean} - true если эффекты активны
+     */
+    hasActiveCombatEffects() {
+        return this.combatEffects.length > 0;
+    }
+
+    /**
+     * Очистка всех боевых эффектов
+     */
+    clearCombatEffects() {
+        // Возвращаем все спрайты частиц из combatParticleLayer в пул
+        for (const child of this.combatParticleLayer.children) {
+            child.visible = false;
+            child.alpha = 1;
+            child.scale.set(1);
+            this.particleSpritePool.push(child);
+        }
+        this.combatParticleLayer.removeChildren();
+
+        // Возвращаем все текстовые спрайты боевых эффектов из uiLayer в пул
+        for (let i = this.uiLayer.children.length - 1; i >= 0; i--) {
+            const child = this.uiLayer.children[i];
+            if (child.textObj && child.isCombatText) {
+                this.uiLayer.removeChild(child);
+                child.visible = false;
+                this.textSpritePool.push(child);
+            }
+        }
+
+        // Очищаем массив эффектов
+        this.combatEffects = [];
     }
 
     /**
