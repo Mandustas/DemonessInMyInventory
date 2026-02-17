@@ -75,6 +75,9 @@ class PIXIRenderer {
         this.uiLayer = new PIXI.Container();
         this.mainContainer.addChild(this.uiLayer);
 
+        // Менеджер UI (инициализируется позже из игры)
+        this.uiManager = null;
+
         // Слой для частиц
         this.particleLayer = new PIXI.ParticleContainer(10000, {
             scale: true,

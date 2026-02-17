@@ -28,21 +28,38 @@ class Game {
 
         // Управление
         this.keys = {};
-        this.setupEventListeners();
-
-        // Создаем дерево навыков
+        
+        // Создаем дерево навыков (старая система, для обратной совместимости)
         this.skillTree = new SkillTree(this.character);
 
-        // Создаем панель навыков
+        // Создаем панель навыков (старая система, для обратной совместимости)
         this.skillBar = new SkillBar(this.character);
         this.skillBar.setGame(this);
 
-        // Создаем окна инвентаря и характеристик
+        // Создаем окна инвентаря и характеристик (старая система, для обратной совместимости)
         this.inventoryWindow = new InventoryWindow(this.character);
         this.statsWindow = new StatsWindow(this.character);
 
-        // Создаем систему сохранения
-        this.saveSystem = new SaveSystem(this);
+        // === НОВАЯ СИСТЕМА UI НА PIXI ===
+        // Инициализация UIManager
+        this.uiManager = new UIManager(this.renderer);
+
+        // Регистрируем новые UI компоненты
+        this.uiSkillBar = new UISkillBar(this.character);
+        this.uiManager.register('skillBar', this.uiSkillBar);
+        this.uiSkillBar.setGame(this);
+
+        this.uiSkillTree = new UISkillTree(this.character, { visible: false });
+        this.uiManager.register('skillTree', this.uiSkillTree);
+
+        this.uiInventory = new UIInventory(this.character, { visible: false });
+        this.uiManager.register('inventory', this.uiInventory);
+
+        this.uiStatsWindow = new UIStatsWindow(this.character, { visible: false });
+        this.uiManager.register('stats', this.uiStatsWindow);
+        // =================================
+
+        this.setupEventListeners();
 
         // Создаем миникарту
         this.minimap = new Minimap(this);
@@ -114,7 +131,12 @@ class Game {
             // Открытие дерева навыков по клавише C
             if (e.key.toLowerCase() === 'c') {
                 e.preventDefault();
-                this.skillTree.toggle();
+                // Используем новую систему UI
+                if (this.uiManager) {
+                    this.uiManager.toggle('skillTree');
+                } else {
+                    this.skillTree.toggle();
+                }
             }
 
             // Использование навыков по цифровым клавишам
@@ -153,17 +175,32 @@ class Game {
 
         // Обработка кнопки открытия дерева навыков
         document.getElementById('skillTreeButton').addEventListener('click', () => {
-            this.skillTree.toggle();
+            // Используем новую систему UI
+            if (this.uiManager) {
+                this.uiManager.toggle('skillTree');
+            } else {
+                this.skillTree.toggle();
+            }
         });
 
         // Обработка кнопки открытия инвентаря
         document.getElementById('inventoryButton').addEventListener('click', () => {
-            this.inventoryWindow.toggle();
+            // Используем новую систему UI
+            if (this.uiManager) {
+                this.uiManager.toggle('inventory');
+            } else {
+                this.inventoryWindow.toggle();
+            }
         });
 
         // Обработка кнопки открытия характеристик
         document.getElementById('statsButton').addEventListener('click', () => {
-            this.statsWindow.toggle();
+            // Используем новую систему UI
+            if (this.uiManager) {
+                this.uiManager.toggle('stats');
+            } else {
+                this.statsWindow.toggle();
+            }
         });
 
         // Обработка клавиш сохранения и загрузки
@@ -183,13 +220,21 @@ class Game {
             // Клавиша I для открытия инвентаря
             if (e.key.toLowerCase() === 'i') {
                 e.preventDefault();
-                this.inventoryWindow.toggle();
+                if (this.uiManager) {
+                    this.uiManager.toggle('inventory');
+                } else {
+                    this.inventoryWindow.toggle();
+                }
             }
 
             // Клавиша S для открытия характеристик
             if (e.key.toLowerCase() === 'o') {
                 e.preventDefault();
-                this.statsWindow.toggle();
+                if (this.uiManager) {
+                    this.uiManager.toggle('stats');
+                } else {
+                    this.statsWindow.toggle();
+                }
             }
         });
 
@@ -928,15 +973,30 @@ class Game {
         document.getElementById('tileX').textContent = tilePos.tileX;
         document.getElementById('tileY').textContent = tilePos.tileY;
 
-        // Обновляем дерево навыков, если оно открыто
+        // Обновляем дерево навыков (старая система), если оно открыто
         this.skillTree.onCharacterUpdate();
 
-        // Обновляем панель навыков
+        // Обновляем панель навыков (старая система)
         this.skillBar.update();
-
-        // Обновляем окна при необходимости
-        this.inventoryWindow.onInventoryUpdate();
-        this.statsWindow.onStatsUpdate();
+        
+        // === НОВАЯ СИСТЕМА UI НА PIXI ===
+        // Обновляем новые UI компоненты через UIManager
+        if (this.uiManager) {
+            // Обновляем UI компоненты
+            if (this.uiSkillBar) {
+                this.uiSkillBar.update();
+            }
+            if (this.uiSkillTree && this.uiSkillTree.isOpen) {
+                this.uiSkillTree.onCharacterUpdate();
+            }
+            if (this.uiInventory && this.uiInventory.isOpen) {
+                this.uiInventory.onInventoryUpdate();
+            }
+            if (this.uiStatsWindow && this.uiStatsWindow.isOpen) {
+                this.uiStatsWindow.onStatsUpdate();
+            }
+        }
+        // =================================
     }
 
     /**
