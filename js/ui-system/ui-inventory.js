@@ -1,6 +1,6 @@
 /**
  * UIInventory - окно инвентаря на новой системе UI
- * Отображает предметы инвентаря, позволяет управлять ими
+ * Изящный дарк фентези стиль
  */
 class UIInventory extends UIComponent {
     constructor(character, config = {}) {
@@ -8,31 +8,39 @@ class UIInventory extends UIComponent {
         
         this.character = character;
         
-        // Размеры из конфига
-        this.width = UIConfig.components.window.minWidth;
-        this.height = UIConfig.components.window.minHeight;
-        this.padding = UIConfig.components.window.padding;
+        // Размеры окна
+        this.width = 380;
+        this.height = 400;
+        this.padding = 20;
         
         // Позиционирование по центру
         this.config.positionKey = 'inventory';
         
-        // Сетка инвентаря
+        // Параметры сетки
+        this.slotSize = 50;
+        this.slotGap = 6;
+        this.columns = 5;
+        
+        // Контейнеры
         this.slotsContainer = null;
         this.inventorySlots = [];
         
-        // Размер слота
-        this.slotSize = UIConfig.components.slot.size;
-        this.slotGap = UIConfig.components.grid.slotGap;
-        this.columns = UIConfig.components.grid.defaultColumns;
+        // Кеш иконок
+        this.iconCache = new Map();
     }
     
     /**
      * Хук инициализации
      */
     onInit() {
-        // Создаем основные элементы UI
-        this.createTitle();
-        this.createCloseButton();
+        // Создаем контейнер с сеткой
+        this.gridContainer = new PIXI.Container();
+        this.container.addChild(this.gridContainer);
+        
+        // Создаем заголовок
+        this.renderTitle();
+        
+        // Создаем сетку инвентаря
         this.createInventoryGrid();
         
         // Обновляем отображение
@@ -40,91 +48,243 @@ class UIInventory extends UIComponent {
     }
     
     /**
-     * Создание заголовка
-     * text-shadow: 2px 2px 4px #000 (из CSS для заголовков)
+     * Отрисовка заголовка
      */
-    createTitle() {
-        this.titleLabel = new UILabel({
-            x: this.padding,
-            y: this.padding,
-            text: 'ИНВЕНТАРЬ',
-            fontSize: UIConfig.fonts.sizes.xxl,
-            fontColor: UIConfig.colors.text.primary,
-            align: 'center',
-            isTitle: true
+    renderTitle() {
+        const titleStyle = new PIXI.TextStyle({
+            fontFamily: "'MedievalSharp', Georgia, serif",
+            fontSize: 22,
+            fill: '#c9b896',
+            fontWeight: 'bold',
+            dropShadow: true,
+            dropShadowColor: '#000000',
+            dropShadowBlur: 4,
+            dropShadowDistance: 2,
+            dropShadowAngle: Math.PI / 4
         });
-        this.titleLabel.width = this.width - this.padding * 2;
-        this.titleLabel.height = 30;
-        this.addChild(this.titleLabel);
+        
+        this.titleText = new PIXI.Text('ИНВЕНТАРЬ', titleStyle);
+        this.titleText.anchor.set(0.5, 0);
+        this.titleText.x = this.width / 2;
+        this.titleText.y = this.padding;
+        this.container.addChild(this.titleText);
+        
+        // Кнопка закрытия
+        this.createCloseButton();
     }
     
     /**
      * Создание кнопки закрытия
      */
     createCloseButton() {
-        this.closeButton = new UIButton({
+        const closeBtn = new UIButton({
             x: this.width - 80,
-            y: 10,
+            y: 8,
             width: 70,
-            height: 25,
+            height: 24,
             text: 'ЗАКРЫТЬ',
-            fontSize: UIConfig.fonts.sizes.sm,
+            fontSize: 11,
             onClick: () => this.close()
         });
-        this.addChild(this.closeButton);
+        this.addChild(closeBtn);
     }
     
     /**
      * Создание сетки инвентаря
      */
     createInventoryGrid() {
-        const gridY = this.padding + 50;
-        const availableWidth = this.width - this.padding * 2;
+        // Вычисляем параметры сетки
+        const maxInventorySize = this.character.maxInventorySize || GAME_CONFIG.CHARACTER.INVENTORY_SIZE;
+        const rows = Math.ceil(maxInventorySize / this.columns);
         
-        // Вычисляем размеры сетки
         const totalWidth = this.columns * this.slotSize + (this.columns - 1) * this.slotGap;
-        const startX = (this.width - totalWidth) / 2;
+        const totalHeight = rows * this.slotSize + (rows - 1) * this.slotGap;
         
-        this.slotsContainer = new UIContainer({
-            x: startX,
-            y: gridY,
-            width: totalWidth,
-            layout: 'grid',
-            gridColumns: this.columns,
-            gap: this.slotGap,
-            cellWidth: this.slotSize,
-            cellHeight: this.slotSize,
-            background: { color: null },
-            border: { color: null, width: 0 }
+        const startX = (this.width - totalWidth) / 2;
+        const startY = this.padding + 45;
+        
+        this.gridStartX = startX;
+        this.gridStartY = startY;
+        
+        // Создаем слоты
+        for (let i = 0; i < maxInventorySize; i++) {
+            const col = i % this.columns;
+            const row = Math.floor(i / this.columns);
+            
+            const x = startX + col * (this.slotSize + this.slotGap);
+            const y = startY + row * (this.slotSize + this.slotGap);
+            
+            const slot = this.createSlot(i, x, y);
+            this.inventorySlots.push(slot);
+            this.gridContainer.addChild(slot.container);
+        }
+        
+        // Обновляем высоту окна
+        this.height = startY + totalHeight + this.padding + 15;
+    }
+    
+    /**
+     * Создание отдельного слота
+     */
+    createSlot(index, x, y) {
+        const slot = {
+            index: index,
+            x: x,
+            y: y,
+            width: this.slotSize,
+            height: this.slotSize,
+            container: new PIXI.Container(),
+            graphics: new PIXI.Graphics(),
+            icon: null,
+            item: null,
+            isHovered: false
+        };
+        
+        slot.container.x = x;
+        slot.container.y = y;
+        slot.container.addChild(slot.graphics);
+        
+        // Включаем интерактивность
+        slot.container.eventMode = 'static';
+        slot.container.cursor = 'pointer';
+        
+        // Обработчики событий
+        slot.container.on('pointerover', () => {
+            slot.isHovered = true;
+            this.renderSlot(slot);
+            this.onSlotHover(index);
         });
         
-        this.addChild(this.slotsContainer);
+        slot.container.on('pointerout', () => {
+            slot.isHovered = false;
+            this.renderSlot(slot);
+            this.hideTooltip();
+        });
         
-        // Создаем слоты по размеру инвентаря
-        const maxInventorySize = this.character.maxInventorySize || GAME_CONFIG.CHARACTER.INVENTORY_SIZE;
-        for (let i = 0; i < maxInventorySize; i++) {
-            this.createInventorySlot(i);
+        slot.container.on('pointerdown', (e) => {
+            if (e.data.button === 2) {
+                this.onSlotRightClick(index);
+            } else {
+                this.onSlotClick(index);
+            }
+        });
+        
+        // Первоначальная отрисовка
+        this.renderSlot(slot);
+        
+        return slot;
+    }
+    
+    /**
+     * Отрисовка слота
+     */
+    renderSlot(slot) {
+        const g = slot.graphics;
+        g.clear();
+        
+        // Градиентный фон слота
+        for (let i = 0; i < this.slotSize; i++) {
+            const t = i / (this.slotSize - 1);
+            const r1 = 42, g1 = 26, b1 = 26; // #2a1a1a
+            const r2 = 26, g2 = 15, b2 = 15;  // #1a0f0f
+            const r = Math.round(r1 + (r2 - r1) * t);
+            const gr = Math.round(g1 + (g2 - g1) * t);
+            const b = Math.round(b1 + (b2 - b1) * t);
+            const color = (r << 16) + (gr << 8) + b;
+            g.beginFill(color);
+            g.drawRect(0, i, this.slotSize, 1);
+            g.endFill();
+        }
+        
+        // Внутренняя тень (inner glow)
+        g.beginFill(0xc9b896, slot.isHovered ? 0.15 : 0.08);
+        g.drawRect(0, 0, this.slotSize, 1);
+        g.endFill();
+        
+        // Определяем цвет рамки
+        let borderColor = 0x3a2a1a;
+        if (slot.item && slot.item.getColorByRarity) {
+            const rarityColor = slot.item.getColorByRarity();
+            borderColor = this.hexToDecimal(rarityColor);
+        } else if (slot.isHovered) {
+            borderColor = 0x6a5a4a;
+        }
+        
+        // Рамка
+        g.lineStyle(2, borderColor);
+        g.drawRoundedRect(0, 0, this.slotSize, this.slotSize, 3);
+        
+        // Иконка предмета
+        if (slot.item) {
+            this.renderSlotIcon(slot);
         }
     }
     
     /**
-     * Создание слота инвентаря
+     * Отрисовка иконки предмета в слоте
      */
-    createInventorySlot(index) {
-        const slot = new UISlot({
-            width: this.slotSize,
-            height: this.slotSize,
-            onClick: () => this.onSlotClick(index),
-            onHover: () => this.onSlotHover(index),
-            onRightClick: () => this.onSlotRightClick(index),
-            onPointerOut: () => this.hideTooltip()
-        });
-
-        // Сохраняем ссылку на слот
-        this.inventorySlots.push(slot);
-        this.slotsContainer.addChild(slot);
-
-        return slot;
+    renderSlotIcon(slot) {
+        // Удаляем старую иконку
+        if (slot.icon) {
+            slot.container.removeChild(slot.icon);
+            slot.icon = null;
+        }
+        
+        // Получаем текстуру
+        const texture = this.getItemIconTexture(slot.item);
+        
+        // Создаем спрайт
+        const icon = new PIXI.Sprite(texture);
+        icon.anchor.set(0.5);
+        icon.x = this.slotSize / 2;
+        icon.y = this.slotSize / 2;
+        icon.scale.set(0.7);
+        
+        slot.icon = icon;
+        slot.container.addChild(icon);
+    }
+    
+    /**
+     * Получение текстуры иконки предмета
+     */
+    getItemIconTexture(item) {
+        const cacheKey = `inv_icon_${item.type}_${item.rarity || 'common'}`;
+        
+        if (this.iconCache.has(cacheKey)) {
+            return this.iconCache.get(cacheKey);
+        }
+        
+        // Цвета по типу предмета
+        const typeColors = {
+            weapon: 0xc0c0c0,
+            helmet: 0x8b4513,
+            armor: 0x4a5568,
+            ring: 0xffd700,
+            amulet: 0x9c27b0
+        };
+        
+        const color = typeColors[item.type] || 0x607d8b;
+        
+        // Создаем текстуру
+        const g = new PIXI.Graphics();
+        
+        // Фон иконки
+        g.beginFill(color);
+        g.drawRect(0, 0, 32, 32);
+        g.endFill();
+        
+        // Рамка по редкости
+        if (item.getColorByRarity) {
+            const rarityColor = this.hexToDecimal(item.getColorByRarity());
+            g.lineStyle(2, rarityColor);
+            g.drawRect(0, 0, 32, 32);
+        }
+        
+        const texture = this.uiRenderer.app.renderer.generateTexture(g);
+        g.destroy();
+        
+        this.iconCache.set(cacheKey, texture);
+        return texture;
     }
     
     /**
@@ -134,7 +294,7 @@ class UIInventory extends UIComponent {
         const item = this.character.inventory[index];
         if (!item) return;
         
-        // Если предмет можно экипировать
+        // Экипировка предмета
         if (item.type && ['weapon', 'helmet', 'armor', 'ring', 'amulet'].includes(item.type)) {
             this.character.equipItem(item);
             this.character.removeFromInventory(index);
@@ -146,7 +306,6 @@ class UIInventory extends UIComponent {
      * Обработка правого клика по слоту
      */
     onSlotRightClick(index) {
-        // Можно реализовать использование предмета
         console.log('Правый клик по слоту', index);
     }
     
@@ -160,7 +319,6 @@ class UIInventory extends UIComponent {
             return;
         }
         
-        // Показываем тултип с информацией о предмете
         const title = item.name || 'Предмет';
         const description = this.getItemDescription(item);
         
@@ -217,76 +375,9 @@ class UIInventory extends UIComponent {
             const slot = this.inventorySlots[i];
             const item = this.character.inventory[i];
             
-            if (item) {
-                // Устанавливаем иконку предмета
-                const iconTexture = this.getItemIconTexture(item);
-                slot.setIcon(iconTexture);
-                
-                // Устанавливаем цвет рамки в зависимости от редкости
-                if (item.getColorByRarity) {
-                    const rarityColor = item.getColorByRarity();
-                    slot.borderStyle = {
-                        color: rarityColor,
-                        width: 2,
-                        radius: 3
-                    };
-                    // Убираем GlowFilter так как он может отсутствовать в PIXI
-                    // slot.container.filters = [...];
-                }
-                
-                slot.title = item.getDescription ? item.getDescription() : (item.name || 'Предмет');
-            } else {
-                slot.clear();
-                slot.title = 'Пустой слот';
-                slot.borderStyle = {
-                    color: UIConfig.colors.border.dark,
-                    width: 2,
-                    radius: 3
-                };
-            }
-            
-            slot.markForUpdate();
+            slot.item = item || null;
+            this.renderSlot(slot);
         }
-    }
-    
-    /**
-     * Получение текстуры иконки предмета
-     */
-    getItemIconTexture(item) {
-        // Проверяем кэш
-        const cacheKey = `item_icon_${item.type}_${item.rarity || 'common'}`;
-        if (this.uiRenderer.textureCache.has(cacheKey)) {
-            return this.uiRenderer.textureCache.get(cacheKey);
-        }
-        
-        // Определяем цвет по типу
-        const typeColors = {
-            weapon: '#c0c0c0',
-            helmet: '#8b4513',
-            armor: '#4a5568',
-            ring: '#ffd700',
-            amulet: '#9c27b0'
-        };
-        
-        const color = typeColors[item.type] || '#607d8b';
-        
-        // Создаем текстуру
-        const texture = this.uiRenderer.createTexture((g) => {
-            // Фон
-            g.beginFill(this.uiRenderer.hexToDecimal(color));
-            g.drawRect(0, 0, 32, 32);
-            g.endFill();
-            
-            // Рамка по цвету редкости
-            if (item.getColorByRarity) {
-                const rarityColor = item.getColorByRarity();
-                g.lineStyle(2, this.uiRenderer.hexToDecimal(rarityColor));
-                g.drawRect(0, 0, 32, 32);
-            }
-        });
-        
-        this.uiRenderer.textureCache.set(cacheKey, texture);
-        return texture;
     }
     
     /**
@@ -297,7 +388,7 @@ class UIInventory extends UIComponent {
     }
     
     /**
-     * Обновление при изменении инвентаря
+     * Обновление при изменении инвентаря (вызывается из игры)
      */
     onInventoryUpdate() {
         if (this.isOpen) {
@@ -306,38 +397,92 @@ class UIInventory extends UIComponent {
     }
     
     /**
-     * Отрисовка фона окна
-     * Градиент: linear-gradient(to bottom, #1a1414 0%, #0d0a0a 100%)
-     * box-shadow: 0 0 20px rgba(0,0,0,0.8), inset 0 0 10px rgba(74,58,42,0.3)
+     * Отрисовка фона окна - изящный дарк фентези стиль
      */
     renderBackground() {
         if (!this.graphics) return;
 
-        // Градиентный фон (вертикальный от #1a1414 к #0d0a0a)
+        // Основной градиентный фон
         for (let i = 0; i < this.height; i++) {
             const t = i / (this.height - 1);
-            const r1 = 26, g1 = 20, b1 = 20; // #1a1414
-            const r2 = 13, g2 = 10, b2 = 10; // #0d0a0a
+            const r1 = 26, g1 = 20, b1 = 20;
+            const r2 = 13, g2 = 10, b2 = 10;
             const r = Math.round(r1 + (r2 - r1) * t);
-            const g = Math.round(g1 + (g2 - g1) * t);
+            const gr = Math.round(g1 + (g2 - g1) * t);
             const b = Math.round(b1 + (b2 - b1) * t);
-            const color = (r << 16) + (g << 8) + b;
+            const color = (r << 16) + (gr << 8) + b;
             this.graphics.beginFill(color);
             this.graphics.drawRect(0, i, this.width, 1);
             this.graphics.endFill();
         }
 
-        // Граница
+        // Внешняя рамка
         this.graphics.lineStyle(2, 0x3a2a1a);
         this.graphics.drawRect(0, 0, this.width, this.height);
 
-        // Внешнее свечение (тень)
-        this.graphics.lineStyle(4, 0x000000, 0.5);
-        this.graphics.drawRect(-4, -4, this.width + 8, this.height + 8);
+        // Толстая внешняя тень
+        this.graphics.lineStyle(4, 0x000000, 0.4);
+        this.graphics.drawRect(-3, -3, this.width + 6, this.height + 6);
 
-        // Внутренняя тень по краям
-        this.graphics.lineStyle(2, 0x4a3a2a, 0.3);
-        this.graphics.drawRect(2, 2, this.width - 4, this.height - 4);
+        // Внутренняя тень
+        this.graphics.lineStyle(2, 0x4a3a2a, 0.2);
+        this.graphics.drawRect(3, 3, this.width - 6, this.height - 6);
+
+        // Декоративные уголки
+        this.drawCornerDecorations();
+
+        // Линия под заголовком
+        this.drawTitleLine();
+    }
+    
+    /**
+     * Отрисовка декоративных уголков
+     */
+    drawCornerDecorations() {
+        const cornerSize = 8;
+        
+        // Верхний левый
+        this.graphics.lineStyle(2, 0x6a5a4a);
+        this.graphics.moveTo(5, 5 + cornerSize);
+        this.graphics.lineTo(5, 5);
+        this.graphics.lineTo(5 + cornerSize, 5);
+        
+        // Верхний правый
+        this.graphics.moveTo(this.width - 5 - cornerSize, 5);
+        this.graphics.lineTo(this.width - 5, 5);
+        this.graphics.lineTo(this.width - 5, 5 + cornerSize);
+        
+        // Нижний левый
+        this.graphics.moveTo(5, this.height - 5 - cornerSize);
+        this.graphics.lineTo(5, this.height - 5);
+        this.graphics.lineTo(5 + cornerSize, this.height - 5);
+        
+        // Нижний правый
+        this.graphics.moveTo(this.width - 5 - cornerSize, this.height - 5);
+        this.graphics.lineTo(this.width - 5, this.height - 5);
+        this.graphics.lineTo(this.width - 5, this.height - 5 - cornerSize);
+    }
+    
+    /**
+     * Отрисовка линии под заголовком
+     */
+    drawTitleLine() {
+        // Основная линия
+        this.graphics.lineStyle(1, 0x3a2a1a);
+        this.graphics.moveTo(this.padding, this.padding + 30);
+        this.graphics.lineTo(this.width - this.padding, this.padding + 30);
+        
+        // Декоративная линия
+        this.graphics.lineStyle(1, 0x6a5a4a, 0.5);
+        this.graphics.moveTo(this.padding + 5, this.padding + 32);
+        this.graphics.lineTo(this.width - this.padding - 5, this.padding + 32);
+    }
+    
+    /**
+     * Отрисовка содержимого
+     */
+    renderContent() {
+        // Заголовок уже отрисован в renderTitle
     }
 }
 

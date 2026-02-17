@@ -1,358 +1,531 @@
 /**
  * UISkillTree - дерево навыков на новой системе UI
- * Отображает навыки персонажа, позволяет их улучшать
+ * Изящный дарк фентези стиль
  */
 class UISkillTree extends UIComponent {
     constructor(character, config = {}) {
         super(config);
-        
+
         this.character = character;
-        
-        // Размеры из конфига
-        this.width = UIConfig.components.window.minWidth;
-        this.height = UIConfig.components.window.minHeight;
-        this.padding = UIConfig.components.window.padding;
-        
+
+        // Размеры окна
+        this.width = 420;
+        this.padding = 20;
+
+        // Параметры сетки навыков
+        this.slotSize = 140;
+        this.slotHeight = 160;
+        this.slotGap = 10;
+        this.columns = 2;
+
         // Позиционирование по центру
         this.config.positionKey = 'skillTree';
-        
-        // Контейнер для навыков
+
+        // Контейнеры
         this.skillsContainer = null;
-        this.skillElements = {};
+        this.skillSlots = [];
+
+        // Кеш текстовых спрайтов
+        this.textSprites = {};
     }
-    
+
     /**
      * Хук инициализации
      */
     onInit() {
-        // Создаем основные элементы UI
-        this.createTitle();
-        this.createPointsDisplay();
-        this.createExperienceBar();
-        this.createSkillsGrid();
-        this.createCloseButton();
-        
+        // Создаем контейнер для навыков
+        this.skillsContainer = new PIXI.Container();
+        this.container.addChild(this.skillsContainer);
+
+        // Создаем заголовок
+        this.renderTitle();
+
+        // Создаем отображение очков навыков
+        this.renderPointsDisplay();
+
+        // Создаем полоску опыта
+        this.renderExperienceBar();
+
+        // Создаем сетку навыков
+        this.createSkillSlots();
+
         // Обновляем отображение
         this.updateDisplay();
     }
-    
+
     /**
-     * Создание заголовка
-     * text-shadow: 2px 2px 4px #000 (из CSS для заголовков)
+     * Отрисовка заголовка
      */
-    createTitle() {
-        this.titleLabel = new UILabel({
-            x: this.padding,
-            y: this.padding,
-            text: 'ДЕРЕВО НАВЫКОВ',
-            fontSize: UIConfig.fonts.sizes.xxl,
-            fontColor: UIConfig.colors.text.primary,
-            align: 'center',
-            isTitle: true
+    renderTitle() {
+        const titleStyle = new PIXI.TextStyle({
+            fontFamily: "'MedievalSharp', Georgia, serif",
+            fontSize: 22,
+            fill: '#c9b896',
+            fontWeight: 'bold',
+            dropShadow: true,
+            dropShadowColor: '#000000',
+            dropShadowBlur: 4,
+            dropShadowDistance: 2,
+            dropShadowAngle: Math.PI / 4
         });
-        this.titleLabel.width = this.width - this.padding * 2;
-        this.titleLabel.height = 30;
-        this.addChild(this.titleLabel);
+
+        this.titleText = new PIXI.Text('НАВЫКИ', titleStyle);
+        this.titleText.anchor.set(0.5, 0);
+        this.titleText.x = this.width / 2;
+        this.titleText.y = this.padding;
+        this.container.addChild(this.titleText);
+
+        // Кнопка закрытия
+        this.createCloseButton();
     }
-    
-    /**
-     * Создание отображения доступных очков навыков
-     */
-    createPointsDisplay() {
-        this.pointsDisplay = new UILabel({
-            x: this.padding,
-            y: this.padding + 40,
-            text: '',
-            fontSize: UIConfig.fonts.sizes.lg,
-            fontColor: UIConfig.colors.text.purple,
-            align: 'center'
-        });
-        this.pointsDisplay.width = this.width - this.padding * 2;
-        this.pointsDisplay.height = 25;
-        this.addChild(this.pointsDisplay);
-    }
-    
-    /**
-     * Создание полоски опыта
-     */
-    createExperienceBar() {
-        const barY = this.padding + 70;
-        const barHeight = 24;
-        
-        // Контейнер для полоски опыта
-        this.expBarContainer = new UIContainer({
-            x: this.padding,
-            y: barY,
-            width: this.width - this.padding * 2,
-            height: barHeight + 30,
-            background: { color: null },
-            border: { color: null, width: 0 }
-        });
-        
-        // Текст с уровнем
-        this.levelLabel = new UILabel({
-            x: 0,
-            y: 0,
-            text: `Уровень: ${this.character.level}`,
-            fontSize: UIConfig.fonts.sizes.md,
-            fontColor: UIConfig.colors.text.gold,
-            align: 'center'
-        });
-        this.levelLabel.width = this.expBarContainer.width;
-        this.expBarContainer.addChild(this.levelLabel);
-        
-        // Прогресс-бар опыта
-        this.expBar = new UIProgressBar({
-            x: 0,
-            y: 20,
-            width: this.expBarContainer.width,
-            height: barHeight,
-            value: 0,
-            fillColor: UIConfig.colors.progress.experience.low,
-            backgroundColor: UIConfig.colors.background.dark,
-            borderColor: UIConfig.colors.border.dark,
-            showText: true,
-            fontSize: UIConfig.fonts.sizes.xs
-        });
-        this.expBarContainer.addChild(this.expBar);
-        
-        this.addChild(this.expBarContainer);
-    }
-    
-    /**
-     * Создание сетки навыков
-     */
-    createSkillsGrid() {
-        const gridY = this.padding + 130;
-        const availableHeight = this.height - gridY - this.padding - 50;
-        
-        // Вычисляем количество рядов
-        const slotSize = 100;
-        const slotGap = 10;
-        const columns = 2;
-        
-        this.skillsContainer = new UIContainer({
-            x: this.padding,
-            y: gridY,
-            width: this.width - this.padding * 2,
-            height: availableHeight,
-            layout: 'grid',
-            gridColumns: columns,
-            gap: slotGap,
-            cellWidth: slotSize,
-            cellHeight: slotSize,
-            background: { color: null },
-            border: { color: null, width: 0 }
-        });
-        
-        this.addChild(this.skillsContainer);
-    }
-    
+
     /**
      * Создание кнопки закрытия
      */
     createCloseButton() {
-        this.closeButton = new UIButton({
+        const closeBtn = new UIButton({
             x: this.width - 80,
-            y: 10,
+            y: 8,
             width: 70,
-            height: 25,
+            height: 24,
             text: 'ЗАКРЫТЬ',
-            fontSize: UIConfig.fonts.sizes.sm,
+            fontSize: 11,
             onClick: () => this.close()
         });
-        this.addChild(this.closeButton);
+        this.addChild(closeBtn);
     }
-    
+
     /**
-     * Создание элемента навыка
+     * Создание отображения очков навыков
      */
-    createSkillElement(skillName, skill) {
-        const container = new UIContainer({
-            width: 100,
-            height: 100,
-            background: {
-                gradient: {
-                    type: 'vertical',
-                    colors: ['#2a1a1a', '#1a0f0f']
-                }
-            },
-            border: {
-                color: UIConfig.colors.border.dark,
-                width: 1,
-                radius: 3
-            },
-            padding: { top: 8, right: 8, bottom: 8, left: 8 }
+    renderPointsDisplay() {
+        const pointsStyle = new PIXI.TextStyle({
+            fontFamily: "'MedievalSharp', Georgia, serif",
+            fontSize: 14,
+            fill: '#9C27B0',
+            fontWeight: 'bold',
+            dropShadow: true,
+            dropShadowColor: '#000000',
+            dropShadowBlur: 2,
+            dropShadowDistance: 1,
+            dropShadowAngle: Math.PI / 4
         });
-        
-        // Название и уровень
-        const nameLabel = new UILabel({
-            x: 0,
-            y: 0,
-            text: `${skill.name}`,
-            fontSize: UIConfig.fonts.sizes.sm,
-            fontColor: UIConfig.colors.text.primary,
-            align: 'center'
-        });
-        nameLabel.width = 84;
-        nameLabel.height = 20;
-        container.addChild(nameLabel);
-        
-        // Уровень
-        const levelLabel = new UILabel({
-            x: 0,
-            y: 18,
-            text: `${skill.level}/${skill.maxLevel}`,
-            fontSize: UIConfig.fonts.sizes.xs,
-            fontColor: UIConfig.colors.text.secondary,
-            align: 'center'
-        });
-        levelLabel.width = 84;
-        levelLabel.height = 15;
-        container.addChild(levelLabel);
-        
-        // Кнопка улучшения
-        const upgradeButton = new UIButton({
-            x: 30,
-            y: 35,
-            width: 25,
-            height: 25,
-            text: '+',
-            fontSize: UIConfig.fonts.sizes.md,
-            enabled: false
-        });
-        container.addChild(upgradeButton);
-        
-        // Описание
-        const descLabel = new UILabel({
-            x: 0,
-            y: 65,
-            text: skill.description,
-            fontSize: UIConfig.fonts.sizes.xs,
-            fontColor: UIConfig.colors.text.secondary,
-            align: 'center',
-            wordWrap: true,
-            wordWrapWidth: 84
-        });
-        descLabel.width = 84;
-        descLabel.height = 30;
-        container.addChild(descLabel);
-        
-        // Функция обновления состояния кнопки
-        const updateButtonState = () => {
-            const canUpgrade = this.character.skillPoints >= (skill.cost || 1) && skill.level < skill.maxLevel;
-            
-            if (canUpgrade) {
-                upgradeButton.setEnabled(true);
-                upgradeButton.onClick = () => {
-                    this.character.upgradeSkill(skillName);
-                    this.updateDisplay();
-                };
-                container.borderStyle = {
-                    color: UIConfig.colors.border.light,
-                    width: 1,
-                    radius: 3
-                };
-            } else {
-                upgradeButton.setEnabled(false);
-                container.borderStyle = {
-                    color: UIConfig.colors.border.dark,
-                    width: 1,
-                    radius: 3
-                };
-            }
-            
-            levelLabel.setText(`${skill.level}/${skill.maxLevel}`);
-            container.markForUpdate();
-        };
 
-        // Обновляем состояние
-        updateButtonState();
-
-        // Клик на контейнер
-        container.onClick = (e) => {
-            // Проверяем, не был ли клик по кнопке
-            if (e.target !== upgradeButton.container) {
-                const canUpgrade = this.character.skillPoints >= (skill.cost || 1) && skill.level < skill.maxLevel;
-                if (canUpgrade) {
-                    this.character.upgradeSkill(skillName);
-                    this.updateDisplay();
-                }
-            }
-        };
-
-        return container;
+        this.pointsText = new PIXI.Text('', pointsStyle);
+        this.pointsText.anchor.set(0.5, 0);
+        this.pointsText.x = this.width / 2;
+        this.pointsText.y = this.padding + 35;
+        this.container.addChild(this.pointsText);
     }
-    
+
+    /**
+     * Создание полоски опыта
+     */
+    renderExperienceBar() {
+        const barY = this.padding + 60;
+        const barWidth = this.width - this.padding * 2;
+        const barHeight = 24;
+
+        // Контейнер для полоски опыта
+        this.expBarContainer = new PIXI.Container();
+        this.expBarContainer.x = this.padding;
+        this.expBarContainer.y = barY;
+        this.container.addChild(this.expBarContainer);
+
+        // Текст с уровнем
+        const levelStyle = new PIXI.TextStyle({
+            fontFamily: "'MedievalSharp', Georgia, serif",
+            fontSize: 13,
+            fill: '#FFD700',
+            fontWeight: 'bold',
+            dropShadow: true,
+            dropShadowColor: '#000000',
+            dropShadowBlur: 2,
+            dropShadowDistance: 1,
+            dropShadowAngle: Math.PI / 4
+        });
+
+        this.levelText = new PIXI.Text(`Уровень: ${this.character.level}`, levelStyle);
+        this.levelText.anchor.set(0.5, 0);
+        this.levelText.x = barWidth / 2;
+        this.levelText.y = 0;
+        this.expBarContainer.addChild(this.levelText);
+
+        // Фон полоски опыта
+        const bgGraphics = new PIXI.Graphics();
+        bgGraphics.beginFill(0x1a1414);
+        bgGraphics.lineStyle(2, 0x3a2a1a);
+        bgGraphics.drawRoundedRect(0, 20, barWidth, barHeight, 3);
+        bgGraphics.endFill();
+        this.expBarContainer.addChild(bgGraphics);
+
+        // Сама полоска опыта
+        this.expBarGraphics = new PIXI.Graphics();
+        this.expBarContainer.addChild(this.expBarGraphics);
+
+        // Текст с опытом
+        const expStyle = new PIXI.TextStyle({
+            fontFamily: "'MedievalSharp', Georgia, serif",
+            fontSize: 11,
+            fill: '#c9b896',
+            dropShadow: true,
+            dropShadowColor: '#000000',
+            dropShadowBlur: 1,
+            dropShadowDistance: 1,
+            dropShadowAngle: Math.PI / 4
+        });
+
+        this.expText = new PIXI.Text('', expStyle);
+        this.expText.anchor.set(0.5, 0.5);
+        this.expText.x = barWidth / 2;
+        this.expText.y = 20 + barHeight / 2;
+        this.expBarContainer.addChild(this.expText);
+    }
+
+    /**
+     * Создание сетки навыков
+     */
+    createSkillSlots() {
+        const skillCount = Object.keys(this.character.skills).length;
+        const rows = Math.ceil(skillCount / this.columns);
+
+        const totalWidth = this.columns * this.slotSize + (this.columns - 1) * this.slotGap;
+        const totalHeight = rows * this.slotHeight + (rows - 1) * this.slotGap;
+
+        const startX = (this.width - totalWidth) / 2;
+        const startY = this.padding + 120;
+
+        this.gridStartX = startX;
+        this.gridStartY = startY;
+
+        // Создаем слоты для каждого навыка
+        let slotIndex = 0;
+        for (const skillName in this.character.skills) {
+            const col = slotIndex % this.columns;
+            const row = Math.floor(slotIndex / this.columns);
+
+            const x = startX + col * (this.slotSize + this.slotGap);
+            const y = startY + row * (this.slotHeight + this.slotGap);
+
+            const slot = this.createSkillSlot(skillName, x, y);
+            this.skillSlots.push(slot);
+            this.skillsContainer.addChild(slot.container);
+
+            slotIndex++;
+        }
+
+        // Обновляем высоту окна
+        this.height = startY + totalHeight + this.padding + 20;
+        this.markForUpdate();
+    }
+
+    /**
+     * Создание отдельного слота навыка
+     */
+    createSkillSlot(skillName, x, y) {
+        const slot = {
+            skillName: skillName,
+            x: x,
+            y: y,
+            width: this.slotSize,
+            height: this.slotHeight,
+            container: new PIXI.Container(),
+            background: new PIXI.Graphics(),
+            nameText: null,
+            levelText: null,
+            upgradeButton: null,
+            upgradeButtonBg: null,
+            descText: null,
+            isHovered: false
+        };
+
+        slot.container.x = x;
+        slot.container.y = y;
+        slot.container.addChild(slot.background);
+
+        // Название навыка
+        const nameStyle = new PIXI.TextStyle({
+            fontFamily: "'MedievalSharp', Georgia, serif",
+            fontSize: 13,
+            fill: '#c9b896',
+            fontWeight: 'bold',
+            dropShadow: true,
+            dropShadowColor: '#000000',
+            dropShadowBlur: 2,
+            dropShadowDistance: 1,
+            dropShadowAngle: Math.PI / 4,
+            wordWrap: true,
+            wordWrapWidth: this.slotSize - 20
+        });
+
+        slot.nameText = new PIXI.Text('', nameStyle);
+        slot.nameText.anchor.set(0.5, 0);
+        slot.nameText.x = this.slotSize / 2;
+        slot.nameText.y = 10;
+        slot.container.addChild(slot.nameText);
+
+        // Уровень навыка
+        const levelStyle = new PIXI.TextStyle({
+            fontFamily: "'MedievalSharp', Georgia, serif",
+            fontSize: 11,
+            fill: '#8a7a6a',
+            dropShadow: true,
+            dropShadowColor: '#000000',
+            dropShadowBlur: 1,
+            dropShadowDistance: 1,
+            dropShadowAngle: Math.PI / 4
+        });
+
+        slot.levelText = new PIXI.Text('', levelStyle);
+        slot.levelText.anchor.set(0.5, 0);
+        slot.levelText.x = this.slotSize / 2;
+        slot.levelText.y = 40;
+        slot.container.addChild(slot.levelText);
+
+        // Кнопка улучшения
+        slot.upgradeButtonBg = new PIXI.Graphics();
+        slot.container.addChild(slot.upgradeButtonBg);
+
+        const buttonStyle = new PIXI.TextStyle({
+            fontFamily: "'MedievalSharp', Georgia, serif",
+            fontSize: 18,
+            fill: '#c9b896',
+            fontWeight: 'bold',
+            dropShadow: true,
+            dropShadowColor: '#000000',
+            dropShadowBlur: 2,
+            dropShadowDistance: 1,
+            dropShadowAngle: Math.PI / 4
+        });
+
+        slot.upgradeButton = new PIXI.Text('+', buttonStyle);
+        slot.upgradeButton.anchor.set(0.5);
+        slot.upgradeButton.x = this.slotSize / 2;
+        slot.upgradeButton.y = 70;
+        slot.container.addChild(slot.upgradeButton);
+
+        // Описание навыка
+        const descStyle = new PIXI.TextStyle({
+            fontFamily: "'MedievalSharp', Georgia, serif",
+            fontSize: 10,
+            fill: '#8a7a6a',
+            dropShadow: true,
+            dropShadowColor: '#000000',
+            dropShadowBlur: 1,
+            dropShadowDistance: 1,
+            dropShadowAngle: Math.PI / 4,
+            wordWrap: true,
+            wordWrapWidth: this.slotSize - 20,
+            align: 'center'
+        });
+
+        slot.descText = new PIXI.Text('', descStyle);
+        slot.descText.anchor.set(0.5, 0);
+        slot.descText.x = this.slotSize / 2;
+        slot.descText.y = 100;
+        slot.container.addChild(slot.descText);
+
+        // Включаем интерактивность
+        slot.container.eventMode = 'static';
+        slot.container.cursor = 'pointer';
+
+        // Обработчики событий
+        slot.container.on('pointerover', () => {
+            slot.isHovered = true;
+            this.renderSkillSlot(slot);
+        });
+
+        slot.container.on('pointerout', () => {
+            slot.isHovered = false;
+            this.renderSkillSlot(slot);
+        });
+
+        slot.container.on('pointerdown', (e) => {
+            // Проверяем, был ли клик по кнопке улучшения
+            const buttonBounds = slot.upgradeButton.getBounds();
+            const localPoint = slot.container.toLocal(e.data.global);
+            
+            if (localPoint.x >= buttonBounds.x && localPoint.x <= buttonBounds.x + buttonBounds.width &&
+                localPoint.y >= buttonBounds.y && localPoint.y <= buttonBounds.y + buttonBounds.height) {
+                this.onUpgradeSkill(skillName);
+            } else {
+                this.onUpgradeSkill(skillName);
+            }
+        });
+
+        // Первоначальная отрисовка
+        this.renderSkillSlot(slot);
+
+        return slot;
+    }
+
+    /**
+     * Отрисовка слота навыка
+     */
+    renderSkillSlot(slot) {
+        const g = slot.background;
+        g.clear();
+
+        // Градиентный фон слота
+        for (let i = 0; i < this.slotHeight; i++) {
+            const t = i / (this.slotHeight - 1);
+            const r1 = 42, g1 = 26, b1 = 26; // #2a1a1a
+            const r2 = 26, g2 = 15, b2 = 15;  // #1a0f0f
+            const r = Math.round(r1 + (r2 - r1) * t);
+            const gr = Math.round(g1 + (g2 - g1) * t);
+            const b = Math.round(b1 + (b2 - b1) * t);
+            const color = (r << 16) + (gr << 8) + b;
+            g.beginFill(color);
+            g.drawRect(0, i, this.slotSize, 1);
+            g.endFill();
+        }
+
+        // Внутренняя тень (inner glow)
+        g.beginFill(0xc9b896, slot.isHovered ? 0.15 : 0.08);
+        g.drawRect(0, 0, this.slotSize, 1);
+        g.endFill();
+
+        // Определяем цвет рамки
+        const skill = this.character.skills[slot.skillName];
+        const canUpgrade = this.character.skillPoints >= (skill.cost || 1) && skill.level < skill.maxLevel;
+        
+        let borderColor = slot.isHovered ? 0x6a5a4a : 0x3a2a1a;
+        if (canUpgrade) {
+            borderColor = 0x6a5a4a;
+        }
+
+        // Рамка
+        g.lineStyle(2, borderColor);
+        g.drawRoundedRect(0, 0, this.slotSize, this.slotHeight, 3);
+
+        // Обновляем тексты
+        this.updateSkillSlotTexts(slot);
+
+        // Обновляем кнопку улучшения
+        this.updateSkillButtonState(slot);
+    }
+
+    /**
+     * Обновление текстов слота навыка
+     */
+    updateSkillSlotTexts(slot) {
+        const skill = this.character.skills[slot.skillName];
+        
+        slot.nameText.text = skill.name;
+        slot.levelText.text = `${skill.level}/${skill.maxLevel}`;
+        slot.descText.text = skill.description;
+    }
+
+    /**
+     * Обновление состояния кнопки улучшения
+     */
+    updateSkillButtonState(slot) {
+        const skill = this.character.skills[slot.skillName];
+        const canUpgrade = this.character.skillPoints >= (skill.cost || 1) && skill.level < skill.maxLevel;
+
+        // Фон кнопки
+        slot.upgradeButtonBg.clear();
+
+        if (canUpgrade) {
+            // Активная кнопка - зелёный фон
+            slot.upgradeButtonBg.beginFill(0x2e7d32);
+            slot.upgradeButtonBg.lineStyle(1, 0x4CAF50);
+            slot.upgradeButtonBg.drawCircle(this.slotSize / 2, 70, 18);
+            slot.upgradeButtonBg.endFill();
+
+            slot.upgradeButton.style.fill = '#ffffff';
+            slot.upgradeButton.alpha = 1;
+        } else {
+            // Неактивная кнопка - серый фон
+            slot.upgradeButtonBg.beginFill(0x3a2a1a);
+            slot.upgradeButtonBg.lineStyle(1, 0x5a4a3a);
+            slot.upgradeButtonBg.drawCircle(this.slotSize / 2, 70, 18);
+            slot.upgradeButtonBg.endFill();
+
+            slot.upgradeButton.style.fill = '#8a7a6a';
+            slot.upgradeButton.alpha = 0.5;
+        }
+    }
+
+    /**
+     * Обработка улучшения навыка
+     */
+    onUpgradeSkill(skillName) {
+        const skill = this.character.skills[skillName];
+        const canUpgrade = this.character.skillPoints >= (skill.cost || 1) && skill.level < skill.maxLevel;
+        
+        if (canUpgrade) {
+            this.character.upgradeSkill(skillName);
+            this.updateDisplay();
+        }
+    }
+
     /**
      * Обновление отображения
      */
     updateDisplay() {
         if (!this.isOpen) return;
-        
+
         // Обновляем очки навыков
-        this.pointsDisplay.setText(`Доступные очки навыков: ${this.character.skillPoints}`);
+        this.pointsText.text = `Доступные очки навыков: ${this.character.skillPoints}`;
 
         // Обновляем полоску опыта
         this.updateExperienceBar();
 
-        // Очищаем контейнер навыков
-        if (this.skillsContainer && this.skillsContainer.container) {
-            this.skillsContainer.children = [];
-            this.skillsContainer.container.removeChildren();
+        // Обновляем все слоты навыков
+        for (const slot of this.skillSlots) {
+            this.renderSkillSlot(slot);
         }
-
-        // Создаем элементы для каждого навыка
-        for (const skillName in this.character.skills) {
-            const skill = this.character.skills[skillName];
-            const skillElement = this.createSkillElement(skillName, skill);
-            this.skillsContainer.addChild(skillElement);
-        }
-
-        this.skillsContainer.updateLayout();
     }
-    
+
     /**
      * Обновление полоски опыта
      */
     updateExperienceBar() {
-        if (!this.expBar) return;
-        
+        const barWidth = this.width - this.padding * 2;
+        const barHeight = 24;
+
         const percent = this.character.experienceForNextLevel > 0
             ? (this.character.experience / this.character.experienceForNextLevel)
             : 0;
-        
-        this.expBar.setValue(percent);
-        
-        if (this.levelLabel) {
-            this.levelLabel.setText(`Уровень: ${this.character.level}`);
+
+        // Очищаем и перерисовываем полоску
+        this.expBarGraphics.clear();
+
+        // Заполнение полоски
+        const fillWidth = Math.floor(barWidth * percent);
+        if (fillWidth > 0) {
+            // Определяем цвет в зависимости от заполнения
+            let expColor;
+            if (percent < 0.3) {
+                expColor = 0x8bc34a;
+            } else if (percent < 0.6) {
+                expColor = 0xffc107;
+            } else if (percent < 0.85) {
+                expColor = 0xff9800;
+            } else {
+                expColor = 0xff5722;
+            }
+
+            this.expBarGraphics.beginFill(expColor);
+            this.expBarGraphics.drawRoundedRect(2, 22, fillWidth - 2, barHeight - 4, 2);
+            this.expBarGraphics.endFill();
         }
-        
-        if (this.expBar.textSprite) {
-            this.expBar.textSprite.text = `${this.character.experience} / ${this.character.experienceForNextLevel} (${(percent * 100).toFixed(1)}%)`;
-        }
-        
-        // Меняем цвет в зависимости от заполнения
-        let expColor;
-        if (percent < 0.3) {
-            expColor = UIConfig.colors.progress.experience.low;
-        } else if (percent < 0.6) {
-            expColor = UIConfig.colors.progress.experience.medium;
-        } else if (percent < 0.85) {
-            expColor = UIConfig.colors.progress.experience.high;
-        } else {
-            expColor = UIConfig.colors.progress.experience.nearlyFull;
-        }
-        this.expBar.setFillColor(expColor);
+
+        // Обновляем текст уровня
+        this.levelText.text = `Уровень: ${this.character.level}`;
+
+        // Обновляем текст опыта
+        this.expText.text = `${this.character.experience} / ${this.character.experienceForNextLevel} (${(percent * 100).toFixed(1)}%)`;
     }
-    
+
     /**
      * Хук при открытии
      */
     onOpen() {
         this.updateDisplay();
     }
-    
+
     /**
      * Обновление при изменении персонажа
      */
@@ -363,40 +536,94 @@ class UISkillTree extends UIComponent {
             this.updateExperienceBar();
         }
     }
-    
+
     /**
-     * Отрисовка фона окна
-     * Градиент: linear-gradient(to bottom, #1a1414 0%, #0d0a0a 100%)
-     * box-shadow: 0 0 20px rgba(0,0,0,0.8), inset 0 0 10px rgba(74,58,42,0.3)
+     * Отрисовка фона окна - изящный дарк фентези стиль
      */
     renderBackground() {
         if (!this.graphics) return;
 
-        // Градиентный фон (вертикальный от #1a1414 к #0d0a0a)
+        // Основной градиентный фон
         for (let i = 0; i < this.height; i++) {
             const t = i / (this.height - 1);
-            const r1 = 26, g1 = 20, b1 = 20; // #1a1414
-            const r2 = 13, g2 = 10, b2 = 10; // #0d0a0a
+            const r1 = 26, g1 = 20, b1 = 20;
+            const r2 = 13, g2 = 10, b2 = 10;
             const r = Math.round(r1 + (r2 - r1) * t);
-            const g = Math.round(g1 + (g2 - g1) * t);
+            const gr = Math.round(g1 + (g2 - g1) * t);
             const b = Math.round(b1 + (b2 - b1) * t);
-            const color = (r << 16) + (g << 8) + b;
+            const color = (r << 16) + (gr << 8) + b;
             this.graphics.beginFill(color);
             this.graphics.drawRect(0, i, this.width, 1);
             this.graphics.endFill();
         }
 
-        // Граница
+        // Внешняя рамка
         this.graphics.lineStyle(2, 0x3a2a1a);
         this.graphics.drawRect(0, 0, this.width, this.height);
 
-        // Внешнее свечение (тень)
-        this.graphics.lineStyle(4, 0x000000, 0.5);
-        this.graphics.drawRect(-4, -4, this.width + 8, this.height + 8);
+        // Толстая внешняя тень
+        this.graphics.lineStyle(4, 0x000000, 0.4);
+        this.graphics.drawRect(-3, -3, this.width + 6, this.height + 6);
 
-        // Внутренняя тень по краям
-        this.graphics.lineStyle(2, 0x4a3a2a, 0.3);
-        this.graphics.drawRect(2, 2, this.width - 4, this.height - 4);
+        // Внутренняя тень
+        this.graphics.lineStyle(2, 0x4a3a2a, 0.2);
+        this.graphics.drawRect(3, 3, this.width - 6, this.height - 6);
+
+        // Декоративные уголки
+        this.drawCornerDecorations();
+
+        // Линия под заголовком
+        this.drawTitleLine();
+    }
+
+    /**
+     * Отрисовка декоративных уголков
+     */
+    drawCornerDecorations() {
+        const cornerSize = 8;
+
+        // Верхний левый
+        this.graphics.lineStyle(2, 0x6a5a4a);
+        this.graphics.moveTo(5, 5 + cornerSize);
+        this.graphics.lineTo(5, 5);
+        this.graphics.lineTo(5 + cornerSize, 5);
+
+        // Верхний правый
+        this.graphics.moveTo(this.width - 5 - cornerSize, 5);
+        this.graphics.lineTo(this.width - 5, 5);
+        this.graphics.lineTo(this.width - 5, 5 + cornerSize);
+
+        // Нижний левый
+        this.graphics.moveTo(5, this.height - 5 - cornerSize);
+        this.graphics.lineTo(5, this.height - 5);
+        this.graphics.lineTo(5 + cornerSize, this.height - 5);
+
+        // Нижний правый
+        this.graphics.moveTo(this.width - 5 - cornerSize, this.height - 5);
+        this.graphics.lineTo(this.width - 5, this.height - 5);
+        this.graphics.lineTo(this.width - 5, this.height - 5 - cornerSize);
+    }
+
+    /**
+     * Отрисовка линии под заголовком
+     */
+    drawTitleLine() {
+        // Основная линия
+        this.graphics.lineStyle(1, 0x3a2a1a);
+        this.graphics.moveTo(this.padding, this.padding + 30);
+        this.graphics.lineTo(this.width - this.padding, this.padding + 30);
+
+        // Декоративная линия
+        this.graphics.lineStyle(1, 0x6a5a4a, 0.5);
+        this.graphics.moveTo(this.padding + 5, this.padding + 32);
+        this.graphics.lineTo(this.width - this.padding - 5, this.padding + 32);
+    }
+
+    /**
+     * Отрисовка содержимого
+     */
+    renderContent() {
+        // Содержимое уже отрисовано в соответствующих методах
     }
 }
 

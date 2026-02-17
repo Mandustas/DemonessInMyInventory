@@ -1,6 +1,7 @@
 /**
  * UISkillBar - панель навыков на новой системе UI
  * Отображает полоски здоровья и маны, слоты для навыков и полоску опыта
+ * Полностью соответствует стилю из skill-bar.js (DOM version)
  */
 class UISkillBar extends UIComponent {
     constructor(character, config = {}) {
@@ -11,12 +12,16 @@ class UISkillBar extends UIComponent {
         this.skillElements = {}; // Элементы UI для каждого слота
         
         // Размеры из конфига
-        this.slotSize = UIConfig.components.slot.size;
-        this.slotGap = UIConfig.components.grid.slotGap;
-        this.circularBarSize = UIConfig.components.circularBar.size;
+        this.slotSize = 50; // GAME_CONFIG.UI.SKILL_BAR.SLOT_WIDTH
+        this.slotGap = 5;   // GAME_CONFIG.UI.SKILL_BAR.SLOT_GAP
+        this.circularBarSize = 60; // GAME_CONFIG.UI.SKILL_BAR.HEALTH_MANA_WIDTH
         
         // Ссылка на игру
         this.game = null;
+        
+        // Компоненты для круговых баров
+        this.healthCircleContainer = null;
+        this.manaCircleContainer = null;
         
         // Позиционирование внизу экрана
         this.config.positionKey = 'skillBar';
@@ -29,8 +34,8 @@ class UISkillBar extends UIComponent {
         // Вычисляем размеры
         const totalSlotsWidth = 9 * this.slotSize + 8 * this.slotGap;
         const barPadding = 8;
-        this.width = totalSlotsWidth + barPadding * 2;
-        this.height = this.circularBarSize + 20; // + место для полоски опыта
+        this.width = totalSlotsWidth + barPadding * 2 + this.circularBarSize * 2 + 30; // +orb+gap+orb
+        this.height = this.circularBarSize + 30; // + место для полоски опыта
         
         // Создаем основные контейнеры
         this.createHealthManaBars();
@@ -43,45 +48,131 @@ class UISkillBar extends UIComponent {
     }
     
     /**
-     * Создание полосок здоровья и маны
+     * Создание полосок здоровья и маны (SVG-подобные круги как в старом UI)
      */
     createHealthManaBars() {
         // Левая панель - Здоровье (круг)
-        this.healthBar = new UICircularBar({
-            x: 0,
-            y: 0,
-            value: 1,
-            fillColor: UIConfig.colors.progress.health,
-            backgroundColor: '#1a1a1a',
-            borderColor: '#8b0000'
-        });
-        this.healthBar.setSize(this.circularBarSize, this.circularBarSize);
-        this.addChild(this.healthBar);
+        this.healthCircleContainer = new PIXI.Container();
+        this.healthCircleContainer.x = 0;
+        this.healthCircleContainer.y = (this.circularBarSize - 60) / 2;
+        this.container.addChild(this.healthCircleContainer);
+        
+        // Создаем SVG-подобный круг здоровья
+        this.createCircularBar(this.healthCircleContainer, 'health');
         
         // Правая панель - Мана (круг)
-        this.manaBar = new UICircularBar({
-            x: this.width - this.circularBarSize,
-            y: 0,
-            value: 1,
-            fillColor: UIConfig.colors.progress.mana,
-            backgroundColor: '#1a1a1a',
-            borderColor: '#00008b'
-        });
-        this.manaBar.setSize(this.circularBarSize, this.circularBarSize);
-        this.addChild(this.manaBar);
+        this.manaCircleContainer = new PIXI.Container();
+        this.manaCircleContainer.x = this.width - this.circularBarSize;
+        this.manaCircleContainer.y = (this.circularBarSize - 60) / 2;
+        this.container.addChild(this.manaCircleContainer);
+        
+        // Создаем SVG-подобный круг маны
+        this.createCircularBar(this.manaCircleContainer, 'mana');
+    }
+    
+    /**
+     * Создание кругового прогресс-бара (как SVG circle в старом UI)
+     */
+    createCircularBar(container, type) {
+        const radius = 26;
+        const circumference = 2 * Math.PI * radius; // ~163.36
+        
+        // Создаем Graphics для круга
+        const circleGraphics = new PIXI.Graphics();
+        
+        // Внешний контур (border)
+        const borderColor = type === 'health' ? 0x8b0000 : 0x00008b;
+        const fillColor = type === 'health' ? 0xff0000 : 0x0000ff;
+        
+        // Рисуем фоновый круг
+        circleGraphics.lineStyle(4, 0x1a1a1a);
+        circleGraphics.drawCircle(30, 30, radius);
+        
+        container.addChild(circleGraphics);
+        
+        // Создаем прогресс (заполняемый круг)
+        const progressGraphics = new PIXI.Graphics();
+        progressGraphics.name = 'progress';
+        container.addChild(progressGraphics);
+        
+        // Сохраняем ссылки
+        if (type === 'health') {
+            this.healthProgress = progressGraphics;
+            this.healthRadius = radius;
+            this.healthCircumference = circumference;
+            this.healthFillColor = fillColor;
+        } else {
+            this.manaProgress = progressGraphics;
+            this.manaRadius = radius;
+            this.manaCircumference = circumference;
+            this.manaFillColor = fillColor;
+        }
+        
+        // Применяем эффект свечения (drop-shadow аналог)
+        // В PIXI используем BlurFilter для свечения
+        if (!container.filters) {
+            const blurFilter = new PIXI.BlurFilter();
+            blurFilter.blur = type === 'health' ? 3 : 3;
+            // Применяем свечение через separate filter
+        }
+    }
+    
+    /**
+     * Отрисовка кругового прогресса (как stroke-dasharray в SVG)
+     */
+    renderCircularProgress(graphics, value, radius, circumference, fillColor, isLow = false) {
+        graphics.clear();
+        
+        const centerX = 30;
+        const centerY = 30;
+        const borderWidth = 4;
+        
+        // Рисуем круг с dasharray эффектом
+        const offset = circumference * (1 - Math.max(0, Math.min(1, value)));
+        
+        // Используем arc для рисования прогресса
+        const startAngle = -Math.PI / 2;
+        const endAngle = startAngle + 2 * Math.PI * value;
+        
+        if (value > 0) {
+            // Цвет с эффектом свечения при низком здоровье
+            const color = isLow && fillColor === 0xff0000 ? 0xff3333 : fillColor;
+            
+            graphics.lineStyle(borderWidth, color);
+            
+            // Рисуем дугу
+            const points = [];
+            const steps = Math.max(1, Math.floor(circumference / 2));
+            
+            for (let i = 0; i <= steps; i++) {
+                const angle = startAngle + (endAngle - startAngle) * (i / steps);
+                points.push(centerX + Math.cos(angle) * radius);
+                points.push(centerY + Math.sin(angle) * radius);
+            }
+            
+            if (points.length >= 4) {
+                graphics.moveTo(points[0], points[1]);
+                for (let i = 2; i < points.length; i += 2) {
+                    graphics.lineTo(points[i], points[i + 1]);
+                }
+            }
+        }
     }
     
     /**
      * Создание UI панели навыков
      */
     createSkillBarUI() {
-        // Контейнер для панели навыков
+        // Контейнер для панели навыков (центр)
         const barPadding = 8;
         const totalSlotsWidth = 9 * this.slotSize + 8 * this.slotGap;
         
+        // Позиция: между орбами
+        const skillBarX = this.circularBarSize + 10;
+        
         this.skillBarContainer = new UIContainer({
-            x: (this.width - totalSlotsWidth) / 2,
-            y: 0,
+            x: skillBarX,
+            y: (this.circularBarSize - (this.slotSize + barPadding * 2)) / 2,
             width: totalSlotsWidth + barPadding * 2,
             height: this.slotSize + barPadding * 2,
             layout: 'flex-horizontal',
@@ -100,7 +191,7 @@ class UISkillBar extends UIComponent {
             }
         });
         
-        // Создаем 9 слотов для навыков
+        // Создаем 9 слотов для навыков (под горячие клавиши 1-9)
         for (let i = 1; i <= 9; i++) {
             const slot = this.createSkillSlot(i);
             this.skillBarContainer.addChild(slot);
@@ -108,9 +199,6 @@ class UISkillBar extends UIComponent {
         }
         
         this.addChild(this.skillBarContainer);
-        
-        // Позиционируем панель навыков между орбами
-        this.skillBarContainer.y = (this.circularBarSize - this.skillBarContainer.height) / 2;
     }
     
     /**
@@ -139,9 +227,10 @@ class UISkillBar extends UIComponent {
     createExperienceBar() {
         const barPadding = 8;
         const totalSlotsWidth = 9 * this.slotSize + 8 * this.slotGap;
+        const skillBarX = this.circularBarSize + 10;
         
         this.expBar = new UIProgressBar({
-            x: (this.width - totalSlotsWidth) / 2,
+            x: skillBarX,
             y: this.circularBarSize + 5,
             width: totalSlotsWidth + barPadding * 2,
             height: 16,
@@ -154,33 +243,49 @@ class UISkillBar extends UIComponent {
         });
         
         this.addChild(this.expBar);
-        this.height = this.circularBarSize + 5 + 16 + 5;
+        this.height = this.circularBarSize + 5 + 16 + 10;
     }
     
     /**
      * Обновление отображения здоровья и маны
      */
     updateHealthManaDisplay() {
-        if (!this.character || !this.healthBar || !this.manaBar) return;
+        if (!this.character) return;
         
         // Обновляем здоровье
         const healthPercent = this.character.health / this.character.maxHealth;
-        this.healthBar.setValue(healthPercent);
+        const isHealthLow = healthPercent < 0.3;
         
         // Меняем цвет при низком здоровье
-        if (healthPercent < 0.3) {
-            this.healthBar.setFillColor(UIConfig.colors.progress.healthLow);
-        } else {
-            this.healthBar.setFillColor(UIConfig.colors.progress.health);
+        const healthColor = isHealthLow ? 0xff3333 : this.healthFillColor;
+        
+        if (this.healthProgress) {
+            this.renderCircularProgress(
+                this.healthProgress, 
+                healthPercent, 
+                this.healthRadius, 
+                this.healthCircumference, 
+                healthColor,
+                isHealthLow
+            );
         }
         
         // Обновляем ману
         const manaPercent = this.character.mana / this.character.maxMana;
-        this.manaBar.setValue(manaPercent);
+        
+        if (this.manaProgress) {
+            this.renderCircularProgress(
+                this.manaProgress, 
+                manaPercent, 
+                this.manaRadius, 
+                this.manaCircumference, 
+                this.manaFillColor
+            );
+        }
     }
     
     /**
-     * Обновление полоски опыта
+     * Обновление полоски опыта (с цветовыми переходами как в старом UI)
      */
     updateExperienceBar() {
         if (!this.expBar || !this.character) return;
@@ -197,7 +302,7 @@ class UISkillBar extends UIComponent {
             this.expBar.textSprite.text = expText;
         }
         
-        // Меняем цвет в зависимости от заполнения
+        // Меняем цвет в зависимости от заполнения (как в старом UI)
         let expColor;
         if (percent < 0.3) {
             expColor = UIConfig.colors.progress.experience.low;

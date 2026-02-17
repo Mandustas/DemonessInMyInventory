@@ -106,6 +106,26 @@ const UIConfig = {
         skillBar: {
             colors: ['#1a1414', '#0d0a0a'],
             type: 'vertical'
+        },
+        // Опыт - зеленый (низкий)
+        experienceLow: {
+            colors: ['#5d9c5d', '#4CAF50', '#3d8b3d'],
+            type: 'vertical'
+        },
+        // Опыт - желто-зеленый
+        experienceMedium: {
+            colors: ['#9ccc65', '#8bc34a', '#7cb342'],
+            type: 'vertical'
+        },
+        // Опыт - желтый
+        experienceHigh: {
+            colors: ['#ffd54f', '#ffca28', '#ffc107'],
+            type: 'vertical'
+        },
+        // Опыт - оранжевый
+        experienceNearlyFull: {
+            colors: ['#ffb74d', '#ffa726', '#ff9800'],
+            type: 'vertical'
         }
     },
 

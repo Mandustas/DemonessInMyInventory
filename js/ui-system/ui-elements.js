@@ -22,18 +22,26 @@ class UIButton extends UIComponent {
         // Обработчики событий
         this.onClick = config.onClick || null;
         this.onHover = config.onHover || null;
+        
+        // Для тени
+        this.glowFilter = null;
     }
 
     /**
      * Хук инициализации
      */
     onInit() {
-        // Создаем текстовую метку с text-shadow
+        // Создаем текстовую метку с text-shadow (используем dropShadow в PIXI)
         this.textSprite = this.uiRenderer.createText(this.text, {
             fontFamily: UIConfig.fonts.family,
             fontSize: this.fontSize,
             fill: this.hexToDecimal(this.fontColor),
-            align: 'center'
+            align: 'center',
+            dropShadow: true,
+            dropShadowColor: '#000000',
+            dropShadowBlur: 2,
+            dropShadowDistance: 1,
+            dropShadowAngle: Math.PI / 4
         });
         this.textSprite.anchor.set(0.5);
         this.container.addChild(this.textSprite);
@@ -91,9 +99,8 @@ class UIButton extends UIComponent {
     updateState() {
         const colors = UIConfig.colors.button[this.state] || UIConfig.colors.button.normal;
 
-        // Обновляем фон с градиентом
+        // Обновляем фон с градиентом (полный 3-цветный градиент как в CSS)
         this.backgroundStyle = {
-            color: colors.bg,
             gradient: {
                 type: 'vertical',
                 colors: colors.bgGradient || UIConfig.gradients.button.colors
