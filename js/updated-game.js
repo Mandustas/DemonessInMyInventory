@@ -28,24 +28,39 @@ class Game {
 
         // Управление
         this.keys = {};
+
+        // === НОВАЯ СИСТЕМА UI НА PIXI ===
+        // Инициализация UIManager
+        this.uiManager = new UIManager(this.renderer);
+
+        // Регистрируем новые UI компоненты
+        this.uiSkillBar = new UISkillBar(this.character);
+        this.uiManager.register('skillBar', this.uiSkillBar);
+        this.uiSkillBar.setGame(this);
+
+        this.uiSkillTree = new UISkillTree(this.character, { visible: false });
+        this.uiManager.register('skillTree', this.uiSkillTree);
+
+        this.uiInventory = new UIInventory(this.character, { visible: false });
+        this.uiManager.register('inventory', this.uiInventory);
+
+        this.uiStatsWindow = new UIStatsWindow(this.character, { visible: false });
+        this.uiManager.register('stats', this.uiStatsWindow);
+
+        // Миникарта на новой UI системе
+        this.uiMinimap = new UIMinimap(this, { visible: true });
+        this.uiManager.register('minimap', this.uiMinimap);
+
+        // Панель кнопок открытия окон
+        this.uiPanelButtons = new UIPanelButtons({ visible: true });
+        this.uiManager.register('panelButtons', this.uiPanelButtons);
+
+        // Меню паузы
+        this.uiPauseMenu = new UIPauseMenu(this, { visible: false });
+        this.uiManager.register('pauseMenu', this.uiPauseMenu);
+        // =================================
+
         this.setupEventListeners();
-
-        // Создаем дерево навыков
-        this.skillTree = new SkillTree(this.character);
-
-        // Создаем панель навыков
-        this.skillBar = new SkillBar(this.character);
-        this.skillBar.setGame(this);
-
-        // Создаем окна инвентаря и характеристик
-        this.inventoryWindow = new InventoryWindow(this.character);
-        this.statsWindow = new StatsWindow(this.character);
-
-        // Создаем систему сохранения
-        this.saveSystem = new SaveSystem(this);
-
-        // Создаем миникарту
-        this.minimap = new Minimap(this);
 
         // Создаем систему эффектов получения уровня
         this.levelUpEffect = new LevelUpEffect(this.renderer);
@@ -53,8 +68,19 @@ class Game {
         // Создаем систему боевых эффектов
         this.combatEffects = new CombatEffectsSystem(this.renderer);
 
+        // Инициализируем систему полосок здоровья для врагов
+        this.renderer.initEnemyHealthBars();
+
         // Переменная для отслеживания подсвеченного предмета
         this.hoveredItemDrop = null;
+
+        // Создаём всплывающую подсказку для предметов
+        this.itemTooltip = new ItemTooltip(this.renderer);
+        // Добавляем тултип напрямую в stage (не в mainContainer), чтобы он был в экранных координатах
+        this.renderer.app.stage.addChild(this.itemTooltip);
+        // Устанавливаем высокий zIndex, чтобы тултип был поверх всех элементов
+        this.itemTooltip.zIndex = 1000;
+        this.renderer.app.stage.sortableChildren = true;
 
         // Устанавливаем обработчик изменения уровня персонажа
         this.character.onLevelChanged = (level, x, y) => {
@@ -101,7 +127,16 @@ class Game {
             // ESC - открыть/закрыть меню паузы
             if (e.key === 'Escape') {
                 e.preventDefault();
-                this.togglePauseMenu();
+                // Используем новую систему UI
+                if (this.uiManager) {
+                    // Если есть открытые окна, закрываем их
+                    if (this.uiManager.hasOpenWindows()) {
+                        this.uiManager.closeAllWindows();
+                    } else {
+                        // Иначе переключаем меню паузы
+                        this.uiManager.toggle('pauseMenu');
+                    }
+                }
                 return;
             }
 
@@ -114,7 +149,12 @@ class Game {
             // Открытие дерева навыков по клавише C
             if (e.key.toLowerCase() === 'c') {
                 e.preventDefault();
-                this.skillTree.toggle();
+                // Используем новую систему UI
+                if (this.uiManager) {
+                    this.uiManager.toggle('skillTree');
+                } else {
+                    this.skillTree.toggle();
+                }
             }
 
             // Использование навыков по цифровым клавишам
@@ -151,21 +191,6 @@ class Game {
             this.handleZoom(e);
         }, { passive: false });
 
-        // Обработка кнопки открытия дерева навыков
-        document.getElementById('skillTreeButton').addEventListener('click', () => {
-            this.skillTree.toggle();
-        });
-
-        // Обработка кнопки открытия инвентаря
-        document.getElementById('inventoryButton').addEventListener('click', () => {
-            this.inventoryWindow.toggle();
-        });
-
-        // Обработка кнопки открытия характеристик
-        document.getElementById('statsButton').addEventListener('click', () => {
-            this.statsWindow.toggle();
-        });
-
         // Обработка клавиш сохранения и загрузки
         window.addEventListener('keydown', (e) => {
             // Ctrl+S для сохранения
@@ -183,49 +208,19 @@ class Game {
             // Клавиша I для открытия инвентаря
             if (e.key.toLowerCase() === 'i') {
                 e.preventDefault();
-                this.inventoryWindow.toggle();
+                if (this.uiManager) {
+                    this.uiManager.toggle('inventory');
+                }
             }
 
             // Клавиша S для открытия характеристик
             if (e.key.toLowerCase() === 'o') {
                 e.preventDefault();
-                this.statsWindow.toggle();
+                if (this.uiManager) {
+                    this.uiManager.toggle('stats');
+                }
             }
         });
-
-        // Обработка кнопок сохранения и загрузки
-        document.getElementById('saveButton').addEventListener('click', () => {
-            this.saveSystem.saveGame();
-        });
-
-        document.getElementById('loadButton').addEventListener('click', () => {
-            this.saveSystem.loadGame();
-        });
-
-        // Обработка кнопок меню паузы
-        document.getElementById('resumeButton').addEventListener('click', () => {
-            this.togglePauseMenu();
-        });
-
-        document.getElementById('exitButton').addEventListener('click', () => {
-            // Выход в главное меню (перезагрузка страницы)
-            location.reload();
-        });
-    }
-
-    /**
-     * Переключение меню паузы
-     */
-    togglePauseMenu() {
-        const pauseMenu = document.getElementById('pauseMenu');
-
-        if (this.gameState === 'playing') {
-            this.gameState = 'paused';
-            pauseMenu.classList.add('active');
-        } else {
-            this.gameState = 'playing';
-            pauseMenu.classList.remove('active');
-        }
     }
 
     /**
@@ -268,7 +263,6 @@ class Game {
 
             if (distance <= attackRange) {
                 const damage = this.character.attack(enemy);
-                console.log(`Атакован враг, нанесено урона: ${damage}`);
 
                 // Если враг умер, удаляем его
                 if (!enemy.isAlive()) {
@@ -359,7 +353,6 @@ class Game {
 
             if (distance <= GAME_CONFIG.ATTACK.RANGE) { // В радиусе атаки
                 const damage = this.character.attack(clickedEnemy);
-                console.log(`Атакован враг, нанесено урона: ${damage}`);
 
                 // Если враг умер, удаляем его
                 if (!clickedEnemy.isAlive()) {
@@ -383,8 +376,8 @@ class Game {
                             const nearestPickedUp = this.itemDropSystem.tryPickupNearest(this.character);
 
                             if (!nearestPickedUp) {
-                                // Если и ближайший не подобрали, перемещаем персонажа к точке клика
-                                this.moveTo(worldX, worldY);
+                                // Если и ближайший не подобрали, ничего не делаем
+                                // this.moveTo(worldX, worldY); // Убрано перемещение по ЛКМ
                             } else {
                                 console.log('Подобран ближайший предмет по клику');
                             }
@@ -402,8 +395,8 @@ class Game {
                         const nearestPickedUp = this.itemDropSystem.tryPickupNearest(this.character);
 
                         if (!nearestPickedUp) {
-                            // Если и ближайший не подобрали, перемещаем персонажа к точке клика
-                            this.moveTo(worldX, worldY);
+                            // Если и ближайший не подобрали, ничего не делаем
+                            // this.moveTo(worldX, worldY); // Убрано перемещение по ЛКМ
                         } else {
                             console.log('Подобран ближайший предмет по клику');
                         }
@@ -411,10 +404,8 @@ class Game {
                         console.log('Подобран предмет по точным координатам клика');
                     }
                 }
-            } else {
-                // Перемещаем персонажа к точке клика
-                this.moveTo(worldX, worldY);
             }
+            // Перемещение по правой кнопке мыши убрано
         }
     }
 
@@ -434,10 +425,12 @@ class Game {
         // Обновляем подсвеченный предмет
         this.hoveredItemDrop = hoveredDrop;
 
-        // Меняем курсор в зависимости от того, находится ли курсор над предметом
+        // Обновляем тултип
         if (hoveredDrop) {
+            this.itemTooltip.show(hoveredDrop);
             this.renderer.app.view.style.cursor = 'pointer'; // Меняем курсор на указатель при наведении на предмет
         } else {
+            this.itemTooltip.hide();
             this.renderer.app.view.style.cursor = 'default'; // Возвращаем стандартный курсор
         }
     }
@@ -673,16 +666,7 @@ class Game {
                 }
                 this.renderer.entitySprites.delete(enemy);
             }
-            
-            // Удаляем полоску здоровья врага
-            const healthBar = this.renderer.entitySprites.get(`${enemy}_healthbar`);
-            if (healthBar) {
-                if (healthBar.parent) {
-                    healthBar.parent.removeChild(healthBar);
-                }
-                this.renderer.entitySprites.delete(`${enemy}_healthbar`);
-            }
-            
+
             this.enemies.splice(index, 1);
         }
     }
@@ -906,6 +890,11 @@ class Game {
         // Обновляем боевые эффекты
         this.combatEffects.update(deltaTime);
 
+        // Обновляем полоски здоровья врагов
+        if (this.renderer.updateEnemyHealthBars) {
+            this.renderer.updateEnemyHealthBars(deltaTime);
+        }
+
         // Обновляем UI каждый кадр для отзывчивости
         this.updateCharacterUI();
     }
@@ -914,11 +903,6 @@ class Game {
      * Обновление UI при изменении характеристик персонажа
      */
     updateCharacterUI() {
-        // Обновляем отображение характеристик
-        document.getElementById('healthValue').textContent = this.character.health;
-        document.getElementById('manaValue').textContent = Math.floor(this.character.mana);
-        document.getElementById('levelValue').textContent = this.character.level;
-
         // Обновляем координаты персонажа
         document.getElementById('coordX').textContent = Math.floor(this.character.x);
         document.getElementById('coordY').textContent = Math.floor(this.character.y);
@@ -928,15 +912,24 @@ class Game {
         document.getElementById('tileX').textContent = tilePos.tileX;
         document.getElementById('tileY').textContent = tilePos.tileY;
 
-        // Обновляем дерево навыков, если оно открыто
-        this.skillTree.onCharacterUpdate();
-
-        // Обновляем панель навыков
-        this.skillBar.update();
-
-        // Обновляем окна при необходимости
-        this.inventoryWindow.onInventoryUpdate();
-        this.statsWindow.onStatsUpdate();
+        // === НОВАЯ СИСТЕМА UI НА PIXI ===
+        // Обновляем новые UI компоненты через UIManager
+        if (this.uiManager) {
+            // Обновляем UI компоненты
+            if (this.uiSkillBar) {
+                this.uiSkillBar.update();
+            }
+            if (this.uiSkillTree && this.uiSkillTree.isOpen) {
+                this.uiSkillTree.onCharacterUpdate();
+            }
+            if (this.uiInventory && this.uiInventory.isOpen) {
+                this.uiInventory.onInventoryUpdate();
+            }
+            if (this.uiStatsWindow && this.uiStatsWindow.isOpen) {
+                this.uiStatsWindow.onStatsUpdate();
+            }
+        }
+        // =================================
     }
 
     /**
@@ -1121,8 +1114,12 @@ class Game {
         // Рендерим выпавшие предметы через PIXI
         this.renderer.renderItems(this.itemDropSystem.drops, this.hoveredItemDrop);
 
-        // Обновляем миникарту
-        this.minimap.update();
+        // Обновляем и рендерим тултип предмета
+        if (this.itemTooltip && this.hoveredItemDrop) {
+            this.itemTooltip.update(this.hoveredItemDrop);
+        }
+
+        // Миникарта обновляется автоматически через UIManager
 
         // Рендерим эффект получения уровня
         this.levelUpEffect.render(deltaTime);
@@ -1159,6 +1156,6 @@ class Game {
 
 // Запуск игры после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
-    game = new Game();
+    window.game = game = new Game();
     game.start();
 });

@@ -170,13 +170,6 @@ const GAME_CONFIG = {
             WATER: '#1976d2',
             ICE: '#bbdefb',
             DECORATION: '#8bc34a'
-        },
-        HEALTH_BAR: {
-            WIDTH: 40,
-            HEIGHT: 6,
-            OFFSET_Y: -5,
-            HEALTH_COLOR_THRESHOLD_HIGH: 0.5,
-            HEALTH_COLOR_THRESHOLD_MEDIUM: 0.25
         }
     },
     
