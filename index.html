@@ -213,8 +213,8 @@
             <div class="tile-coords">Тайл: <span id="tileX">0</span>, <span id="tileY">0</span></div>
         </div>
         
-        <!-- Top Right Buttons -->
-        <div id="topButtons">
+        <!-- Top Right Buttons (скрыты, используется новая UI-система) -->
+        <div id="topButtons" style="display: none;">
             <button id="statsButton" class="fantasy-btn">Характеристики (S)</button>
             <button id="inventoryButton" class="fantasy-btn">Инвентарь (I)</button>
             <button id="skillTreeButton" class="fantasy-btn">Навыки (C)</button>
@@ -234,8 +234,8 @@
             </div>
         </div>
 
-        <!-- Pause Menu -->
-        <div id="pauseMenu">
+        <!-- Pause Menu (скрыто, используется новая UI-система) -->
+        <div id="pauseMenu" style="display: none;">
             <div class="menu-panel">
                 <h2>Меню</h2>
                 <button id="saveButton" class="fantasy-btn">Сохранить игру</button>
@@ -265,6 +265,8 @@
     <script src="js/ui-system/ui-inventory.js"></script>
     <script src="js/ui-system/ui-stats-window.js"></script>
     <script src="js/ui-system/ui-minimap.js"></script>
+    <script src="js/ui-system/ui-panel-buttons.js"></script>
+    <script src="js/ui-system/ui-pause-menu.js"></script>
     
     <!-- Старые UI компоненты (для обратной совместимости) -->
     <script src="js/ui-components.js"></script>

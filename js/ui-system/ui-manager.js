@@ -121,6 +121,18 @@ class UIManager {
         canvas.addEventListener('mouseup', this.eventHandlers.mouseup);
         window.addEventListener('keydown', this.eventHandlers.keydown);
         window.addEventListener('keyup', this.eventHandlers.keyup);
+
+        // Обработчик изменения размера окна
+        window.addEventListener('resize', () => {
+            const width = this.pixiRenderer.app.screen.width;
+            const height = this.pixiRenderer.app.screen.height;
+            this.handleResize(width, height);
+        });
+
+        // Вызываем handleResize при инициализации для установки начальных позиций
+        const width = this.pixiRenderer.app.screen.width;
+        const height = this.pixiRenderer.app.screen.height;
+        this.handleResize(width, height);
     }
     
     /**
@@ -369,7 +381,7 @@ class UIManager {
     handleResize(width, height) {
         // Обновляем позиции компонентов с относительным позиционированием
         for (const component of this.components.values()) {
-            if (component.config.position) {
+            if (component.config.positionKey || component.config.position) {
                 this.updateComponentPosition(component, width, height);
             }
         }

@@ -61,6 +61,14 @@ class Game {
         // Миникарта на новой UI системе
         this.uiMinimap = new UIMinimap(this, { visible: true });
         this.uiManager.register('minimap', this.uiMinimap);
+
+        // Панель кнопок открытия окон
+        this.uiPanelButtons = new UIPanelButtons({ visible: true });
+        this.uiManager.register('panelButtons', this.uiPanelButtons);
+
+        // Меню паузы
+        this.uiPauseMenu = new UIPauseMenu(this, { visible: false });
+        this.uiManager.register('pauseMenu', this.uiPauseMenu);
         // =================================
 
         this.setupEventListeners();
@@ -119,7 +127,10 @@ class Game {
             // ESC - открыть/закрыть меню паузы
             if (e.key === 'Escape') {
                 e.preventDefault();
-                this.togglePauseMenu();
+                // Используем новую систему UI
+                if (this.uiManager) {
+                    this.uiManager.toggle('pauseMenu');
+                }
                 return;
             }
 
@@ -174,36 +185,6 @@ class Game {
             this.handleZoom(e);
         }, { passive: false });
 
-        // Обработка кнопки открытия дерева навыков
-        document.getElementById('skillTreeButton').addEventListener('click', () => {
-            // Используем новую систему UI
-            if (this.uiManager) {
-                this.uiManager.toggle('skillTree');
-            } else {
-                this.skillTree.toggle();
-            }
-        });
-
-        // Обработка кнопки открытия инвентаря
-        document.getElementById('inventoryButton').addEventListener('click', () => {
-            // Используем новую систему UI
-            if (this.uiManager) {
-                this.uiManager.toggle('inventory');
-            } else {
-                this.inventoryWindow.toggle();
-            }
-        });
-
-        // Обработка кнопки открытия характеристик
-        document.getElementById('statsButton').addEventListener('click', () => {
-            // Используем новую систему UI
-            if (this.uiManager) {
-                this.uiManager.toggle('stats');
-            } else {
-                this.statsWindow.toggle();
-            }
-        });
-
         // Обработка клавиш сохранения и загрузки
         window.addEventListener('keydown', (e) => {
             // Ctrl+S для сохранения
@@ -247,31 +228,6 @@ class Game {
         document.getElementById('loadButton').addEventListener('click', () => {
             this.saveSystem.loadGame();
         });
-
-        // Обработка кнопок меню паузы
-        document.getElementById('resumeButton').addEventListener('click', () => {
-            this.togglePauseMenu();
-        });
-
-        document.getElementById('exitButton').addEventListener('click', () => {
-            // Выход в главное меню (перезагрузка страницы)
-            location.reload();
-        });
-    }
-
-    /**
-     * Переключение меню паузы
-     */
-    togglePauseMenu() {
-        const pauseMenu = document.getElementById('pauseMenu');
-
-        if (this.gameState === 'playing') {
-            this.gameState = 'paused';
-            pauseMenu.classList.add('active');
-        } else {
-            this.gameState = 'playing';
-            pauseMenu.classList.remove('active');
-        }
     }
 
     /**
@@ -1219,6 +1175,6 @@ class Game {
 
 // Запуск игры после загрузки DOM
 document.addEventListener('DOMContentLoaded', () => {
-    game = new Game();
+    window.game = game = new Game();
     game.start();
 });
