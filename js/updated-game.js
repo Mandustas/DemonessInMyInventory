@@ -57,12 +57,13 @@ class Game {
 
         this.uiStatsWindow = new UIStatsWindow(this.character, { visible: false });
         this.uiManager.register('stats', this.uiStatsWindow);
+
+        // Миникарта на новой UI системе
+        this.uiMinimap = new UIMinimap(this, { visible: true });
+        this.uiManager.register('minimap', this.uiMinimap);
         // =================================
 
         this.setupEventListeners();
-
-        // Создаем миникарту
-        this.minimap = new Minimap(this);
 
         // Создаем систему эффектов получения уровня
         this.levelUpEffect = new LevelUpEffect(this.renderer);
@@ -1181,8 +1182,7 @@ class Game {
         // Рендерим выпавшие предметы через PIXI
         this.renderer.renderItems(this.itemDropSystem.drops, this.hoveredItemDrop);
 
-        // Обновляем миникарту
-        this.minimap.update();
+        // Миникарта обновляется автоматически через UIManager
 
         // Рендерим эффект получения уровня
         this.levelUpEffect.render(deltaTime);
