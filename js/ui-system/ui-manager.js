@@ -10,7 +10,7 @@ class UIManager {
         // Создаём UIRenderer для работы с UI компонентами
         this.uiRenderer = new UIRenderer(pixiRenderer);
         this.uiRenderer.init();
-        
+
         // Устанавливаем ссылку на UIManager в uiRenderer
         this.uiRenderer.uiManager = this;
 
@@ -20,9 +20,12 @@ class UIManager {
         // PIXI контейнер для UI
         this.uiContainer = null;
 
-        // Активный тултип
+        // Активный тултип (простой текстовый)
         this.activeTooltip = null;
         this.tooltipContainer = null;
+
+        // Тултип для предметов (ItemTooltip)
+        this.itemTooltip = null;
 
         // Состояние ввода
         this.inputState = {
@@ -51,6 +54,12 @@ class UIManager {
         this.tooltipContainer = new PIXI.Container();
         this.tooltipContainer.zIndex = UIConfig.zIndices.tooltips;
         this.pixiRenderer.app.stage.addChild(this.tooltipContainer);
+
+        // Создаём тултип для предметов
+        this.itemTooltip = new ItemTooltip(this.pixiRenderer);
+        this.pixiRenderer.app.stage.addChild(this.itemTooltip);
+        this.itemTooltip.zIndex = UIConfig.zIndices.tooltips + 1;
+        this.pixiRenderer.app.stage.sortableChildren = true;
 
         // Настраиваем обработку ввода
         this.setupInputHandlers();
@@ -349,6 +358,71 @@ class UIManager {
     hideTooltip() {
         if (this.activeTooltip) {
             this.activeTooltip.visible = false;
+        }
+    }
+
+    /**
+     * Показ тултипа предмета
+     * @param {Item} item - объект предмета
+     * @param {number} screenX - координата X экрана
+     * @param {number} screenY - координата Y экрана
+     */
+    showItemTooltip(item, screenX, screenY) {
+        if (!this.itemTooltip || !item) {
+            this.hideItemTooltip();
+            return;
+        }
+
+        // Создаём фиктивный drop объект для совместимости с ItemTooltip
+        const drop = {
+            item: item,
+            displayX: 0,
+            displayY: 0
+        };
+
+        this.itemTooltip.show(drop);
+        this.itemTooltip.visible = true;
+
+        // Обновляем позицию
+        this.updateItemTooltipPosition(screenX, screenY);
+    }
+
+    /**
+     * Обновление позиции тултипа предмета
+     */
+    updateItemTooltipPosition(screenX, screenY) {
+        if (!this.itemTooltip) return;
+
+        // Получаем координаты относительно канваса
+        const rect = this.pixiRenderer.app.view.getBoundingClientRect();
+        const x = screenX - rect.left;
+        const y = screenY - rect.top;
+
+        // Позиционируем тултип справа и выше курсора
+        // Используем tooltipWidth/tooltipHeight вместо width/height
+        const tooltipWidth = this.itemTooltip.tooltipWidth || this.itemTooltip.minWidth;
+        const tooltipHeight = this.itemTooltip.tooltipHeight || 100;
+
+        let posX = x + 15;
+        if (posX + tooltipWidth > this.pixiRenderer.app.screen.width) {
+            posX = x - tooltipWidth - 15;
+        }
+
+        let posY = y - tooltipHeight / 2;
+        if (posY < 0) {
+            posY = y + 15;
+        }
+
+        this.itemTooltip.x = posX;
+        this.itemTooltip.y = posY;
+    }
+
+    /**
+     * Скрытие тултипа предмета
+     */
+    hideItemTooltip() {
+        if (this.itemTooltip) {
+            this.itemTooltip.hide();
         }
     }
     

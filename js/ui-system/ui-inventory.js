@@ -139,28 +139,38 @@ class UIInventory extends UIComponent {
             item: null,
             isHovered: false
         };
-        
+
         slot.container.x = x;
         slot.container.y = y;
         slot.container.addChild(slot.graphics);
-        
+
         // Включаем интерактивность
         slot.container.eventMode = 'static';
         slot.container.cursor = 'pointer';
-        
+
         // Обработчики событий
         slot.container.on('pointerover', () => {
             slot.isHovered = true;
             this.renderSlot(slot);
-            this.onSlotHover(index);
+            this.onSlotHover(index, slot);
         });
-        
+
         slot.container.on('pointerout', () => {
             slot.isHovered = false;
             this.renderSlot(slot);
-            this.hideTooltip();
+            this.hideItemTooltip();
         });
-        
+
+        slot.container.on('pointermove', (e) => {
+            // Обновляем позицию тултипа при движении мыши
+            if (slot.item && slot.isHovered) {
+                const rect = this.uiRenderer.app.view.getBoundingClientRect();
+                const screenX = e.data.global.x;
+                const screenY = e.data.global.y;
+                this.updateItemTooltipPosition(screenX, screenY);
+            }
+        });
+
         slot.container.on('pointerdown', (e) => {
             if (e.data.button === 2) {
                 this.onSlotRightClick(index);
@@ -168,10 +178,10 @@ class UIInventory extends UIComponent {
                 this.onSlotClick(index);
             }
         });
-        
+
         // Первоначальная отрисовка
         this.renderSlot(slot);
-        
+
         return slot;
     }
     
@@ -312,19 +322,28 @@ class UIInventory extends UIComponent {
     /**
      * Обработка наведения на слот
      */
-    onSlotHover(index) {
+    onSlotHover(index, slot) {
         const item = this.character.inventory[index];
         if (!item) {
-            this.hideTooltip();
+            this.hideItemTooltip();
             return;
         }
-        
-        const title = item.name || 'Предмет';
-        const description = this.getItemDescription(item);
-        
-        this.showTooltip(title, description);
+
+        // Получаем экранные координаты из слота
+        const screenX = slot.container.parent.toGlobal(slot.container).x + this.slotSize / 2;
+        const screenY = slot.container.parent.toGlobal(slot.container).y + this.slotSize / 2;
+
+        // Используем ItemTooltip для предметов с методом getColorByRarity
+        if (item.getColorByRarity) {
+            this.showItemTooltip(item, screenX, screenY);
+        } else {
+            // Для простых предметов используем старый тултип
+            const title = item.name || 'Предмет';
+            const description = this.getItemDescription(item);
+            this.showTooltip(title, description, screenX, screenY);
+        }
     }
-    
+
     /**
      * Получение описания предмета
      */
@@ -332,29 +351,56 @@ class UIInventory extends UIComponent {
         if (item.getDescription) {
             return item.getDescription();
         }
-        
+
         let desc = `Тип: ${item.type || 'Неизвестно'}\n`;
         desc += `Редкость: ${item.rarity || 'Обычный'}\n`;
-        
+
         if (item.stats) {
             desc += '\nХарактеристики:\n';
             for (const [stat, value] of Object.entries(item.stats)) {
                 desc += `  ${stat}: ${value}\n`;
             }
         }
-        
+
         return desc;
     }
-    
+
     /**
-     * Показ тултипа
+     * Показ тултипа предмета
      */
-    showTooltip(title, description) {
+    showItemTooltip(item, screenX, screenY) {
         if (this.uiRenderer.uiManager) {
-            this.uiRenderer.uiManager.showTooltip(title, description, 0, 0);
+            this.uiRenderer.uiManager.showItemTooltip(item, screenX, screenY);
         }
     }
-    
+
+    /**
+     * Обновление позиции тултипа предмета
+     */
+    updateItemTooltipPosition(screenX, screenY) {
+        if (this.uiRenderer.uiManager) {
+            this.uiRenderer.uiManager.updateItemTooltipPosition(screenX, screenY);
+        }
+    }
+
+    /**
+     * Скрытие тултипа предмета
+     */
+    hideItemTooltip() {
+        if (this.uiRenderer.uiManager) {
+            this.uiRenderer.uiManager.hideItemTooltip();
+        }
+    }
+
+    /**
+     * Показ тултипа (старый метод для простых предметов)
+     */
+    showTooltip(title, description, x, y) {
+        if (this.uiRenderer.uiManager) {
+            this.uiRenderer.uiManager.showTooltip(title, description, x, y);
+        }
+    }
+
     /**
      * Скрытие тултипа
      */

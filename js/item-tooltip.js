@@ -6,17 +6,21 @@
 class ItemTooltip extends PIXI.Container {
     constructor(pixiRenderer) {
         super();
-        
+
         this.pixiRenderer = pixiRenderer;
         this.visible = false;
         this.currentItem = null;
-        
+
         // Размеры подсказки
         this.minWidth = 200;
         this.maxWidth = 300;
         this.padding = 12;
         this.rowHeight = 18;
         
+        // Сохраняем вычисленные размеры (для использования до отрисовки)
+        this.tooltipWidth = this.minWidth;
+        this.tooltipHeight = 100;
+
         // Создаём элементы подсказки
         this.createVisuals();
     }
@@ -191,7 +195,7 @@ class ItemTooltip extends PIXI.Container {
         this.valueLabel.y = y;
         y += this.rowHeight + padding;
 
-        // Вычисляем ширину
+        // Вычисляем ширину на основе содержимого
         const maxWidth = Math.max(
             this.nameLabel.width + padding * 2,
             this.typeLabel.width + padding * 2,
@@ -204,9 +208,9 @@ class ItemTooltip extends PIXI.Container {
         const width = Math.min(maxWidth, this.maxWidth);
         const height = y;
 
-        // Устанавливаем размеры контейнера
-        this.width = width;
-        this.height = height;
+        // Сохраняем размеры в отдельных свойствах для использования до отрисовки
+        this.tooltipWidth = width;
+        this.tooltipHeight = height;
 
         // Рисуем фон
         this.drawBackground(width, height);
@@ -305,8 +309,9 @@ class ItemTooltip extends PIXI.Container {
         const screenY = centerY + (drop.displayY - this.pixiRenderer.camera.y) * zoom;
 
         // Позиционируем справа и выше предмета
-        const tooltipWidth = this.width || this.minWidth;
-        const tooltipHeight = this.height || 100;
+        // Используем tooltipWidth/tooltipHeight вместо width/height
+        const tooltipWidth = this.tooltipWidth || this.minWidth;
+        const tooltipHeight = this.tooltipHeight || 100;
 
         // Проверяем, помещается ли справа
         let posX = screenX + 20;
