@@ -71,6 +71,10 @@ class PIXIRenderer {
         this.objectLayer.eventMode = 'none'; // Отключаем интерактивность для объектов
         this.mainContainer.addChild(this.objectLayer);
 
+        // ✅ Слой для полосок здоровья (ПОСЛЕ objectLayer)
+        this.healthBarLayer = new PIXI.Container();
+        this.mainContainer.addChild(this.healthBarLayer);
+
         // Слой для UI элементов (здоровье, эффекты)
         this.uiLayer = new PIXI.Container();
         this.mainContainer.addChild(this.uiLayer);
@@ -165,6 +169,9 @@ class PIXIRenderer {
 
         // Эффекты боя (частицы + текст + вспышки)
         this.combatEffects = []; // Массив боевых эффектов
+
+        // Система полосок здоровья для врагов
+        this.enemyHealthBars = null; // Инициализируется в initEnemyHealthBars()
     }
 
     /**
@@ -327,7 +334,7 @@ class PIXIRenderer {
         shadow.y = sprite.y + offsetY;
         shadow.scale.x = sprite.scale.x;
         shadow.scale.y = sprite.scale.y;
-        
+
         return shadow;
     }
 
@@ -340,7 +347,7 @@ class PIXIRenderer {
         if (sprite) {
             // Создаем тень
             const shadow = this.createShadow(sprite);
-            
+
             // Добавляем тень в слой объектов под спрайтом сущности
             const entityIndex = this.objectLayer.children.indexOf(sprite);
             if (entityIndex !== -1) {
@@ -348,7 +355,7 @@ class PIXIRenderer {
             } else {
                 this.objectLayer.addChild(shadow);
             }
-            
+
             // Сохраняем ссылку на тень
             this.entitySprites.set(`${entity}_shadow`, shadow);
         }
@@ -362,22 +369,22 @@ class PIXIRenderer {
     createSpriteSheet(textures, sheetName) {
         // Создаем временный контейнер для объединения текстур
         const container = new PIXI.Container();
-        
+
         // Добавляем все текстуры в контейнер с размещением по сетке
         const gridSize = Math.ceil(Math.sqrt(textures.length));
         const textureSize = textures[0]?.width || 32; // Предполагаем, что все текстуры одного размера
-        
+
         for (let i = 0; i < textures.length; i++) {
             const sprite = new PIXI.Sprite(textures[i]);
             sprite.x = (i % gridSize) * textureSize;
             sprite.y = Math.floor(i / gridSize) * textureSize;
             container.addChild(sprite);
         }
-        
+
         // Генерируем текстуру спрайтшита
         const spriteSheetTexture = this.app.renderer.generateTexture(container);
         this.spriteSheetTextures.set(sheetName, spriteSheetTexture);
-        
+
         return spriteSheetTexture;
     }
 
@@ -391,12 +398,12 @@ class PIXIRenderer {
     createAnimatedEntityTextures(size, color, animationType) {
         const textures = [];
         const frameCount = 4; // Количество кадров для анимации
-        
+
         for (let i = 0; i < frameCount; i++) {
             const graphics = new PIXI.Graphics();
-            
+
             // Рисуем базовую форму в зависимости от типа анимации
-            switch(animationType) {
+            switch (animationType) {
                 case 'walk':
                     // Анимация ходьбы - слегка изменяем позицию ног/тела
                     graphics.beginFill(this.hexToDecimal(color));
@@ -405,13 +412,13 @@ class PIXIRenderer {
                     this.drawIsometricEntity(graphics, 0, offset, size.width * 0.8, size.height * 0.6);
                     graphics.endFill();
                     break;
-                    
+
                 case 'attack':
                     // Анимация атаки - поворот тела или вытягивание оружия
                     graphics.beginFill(this.hexToDecimal(color));
                     this.drawIsometricEntity(graphics, 0, 0, size.width * 0.8, size.height * 0.6);
                     graphics.endFill();
-                    
+
                     // Добавляем анимацию оружия
                     graphics.lineStyle(3, 0xc0c0c0); // Серебристый
                     if (i === 0) {
@@ -428,7 +435,7 @@ class PIXIRenderer {
                         graphics.lineTo(20, -20);
                     }
                     break;
-                    
+
                 case 'hurt':
                     // Анимация получения урона - мигание красным или отскок
                     const hurtColor = i % 2 === 0 ? this.hexToDecimal(color) : 0xFF0000;
@@ -436,7 +443,7 @@ class PIXIRenderer {
                     this.drawIsometricEntity(graphics, 0, 0, size.width * 0.8, size.height * 0.6);
                     graphics.endFill();
                     break;
-                    
+
                 case 'die':
                     // Анимация смерти - постепенное падение
                     graphics.beginFill(this.hexToDecimal(color));
@@ -444,19 +451,19 @@ class PIXIRenderer {
                     this.drawIsometricEntity(graphics, 0, deathOffset, size.width * 0.8, size.height * 0.6);
                     graphics.endFill();
                     break;
-                    
+
                 default:
                     // Базовая текстура
                     graphics.beginFill(this.hexToDecimal(color));
                     this.drawIsometricEntity(graphics, 0, 0, size.width * 0.8, size.height * 0.6);
                     graphics.endFill();
             }
-            
+
             // Добавляем постоянные элементы (голова, глаза и т.д.)
             graphics.beginFill(0xf9d9aa); // Телесный цвет головы
             graphics.drawCircle(0, -15, size.width * 0.25);
             graphics.endFill();
-            
+
             // Обводка головы
             graphics.lineStyle(2, 0xd6bba0);
             graphics.drawCircle(0, -15, size.width * 0.25);
@@ -466,10 +473,10 @@ class PIXIRenderer {
             graphics.drawCircle(-4, -16, 2);
             graphics.drawCircle(4, -16, 2);
             graphics.endFill();
-            
+
             textures.push(this.app.renderer.generateTexture(graphics));
         }
-        
+
         return textures;
     }
 
@@ -484,7 +491,7 @@ class PIXIRenderer {
         if (entity.constructor.name === 'Character') {
             color = this.colors.player;
         } else if (entity.type) {
-            switch(entity.type) {
+            switch (entity.type) {
                 case 'weak': color = this.colors.enemyWeak; break;
                 case 'strong': color = this.colors.enemyStrong; break;
                 case 'fast': color = this.colors.enemyFast; break;
@@ -494,26 +501,26 @@ class PIXIRenderer {
         } else {
             color = this.colors.enemy;
         }
-        
+
         // Проверяем, есть ли уже анимация для этой сущности
         const entityAnimations = this.animations.get(entity) || {};
-        
+
         // Если анимация уже проигрывается, не запускаем снова
         if (entityAnimations.currentAnimation === animationType) {
             return;
         }
-        
+
         // Создаем текстуры для анимации, если их еще нет
         const animationKey = `${entity.constructor.name || entity.type}_${animationType}`;
         if (!this.entityTextures.has(animationKey)) {
             const textures = this.createAnimatedEntityTextures(
-                { width: 32, height: 32 }, 
-                color, 
+                { width: 32, height: 32 },
+                color,
                 animationType
             );
             this.entityTextures.set(animationKey, textures);
         }
-        
+
         // Обновляем информацию об анимации для сущности
         entityAnimations.currentAnimation = animationType;
         entityAnimations.frameIndex = 0;
@@ -528,18 +535,18 @@ class PIXIRenderer {
      */
     updateAnimations(deltaTime) {
         this.animationFrame++;
-        
+
         // Обновляем каждую анимацию
         for (const [entity, animData] of this.animations.entries()) {
             if (animData.currentAnimation) {
                 // Увеличиваем время кадра
                 animData.frameTime += deltaTime;
-                
+
                 // Если прошло достаточно времени для смены кадра
                 if (animData.frameTime > 0.2) { // 0.2 секунды на кадр
                     animData.frameIndex = (animData.frameIndex + 1) % animData.totalFrames;
                     animData.frameTime = 0;
-                    
+
                     // Обновляем спрайт сущности
                     const sprite = this.entitySprites.get(entity);
                     if (sprite) {
@@ -547,10 +554,10 @@ class PIXIRenderer {
                         const textures = this.entityTextures.get(animationKey);
                         if (textures && textures[animData.frameIndex]) {
                             sprite.texture = textures[animData.frameIndex];
-                            
+
                             // Если анимация закончилась, удаляем информацию об анимации
-                            if (animData.currentAnimation === 'attack' || 
-                                animData.currentAnimation === 'hurt' || 
+                            if (animData.currentAnimation === 'attack' ||
+                                animData.currentAnimation === 'hurt' ||
                                 animData.currentAnimation === 'die') {
                                 if (animData.frameIndex === animData.totalFrames - 1) {
                                     // Для однократных анимаций удаляем информацию
@@ -578,7 +585,7 @@ class PIXIRenderer {
                     sprite.texture = this.entityTextures.get('player');
                 } else {
                     let textureKey = 'enemy_basic';
-                    switch(entity.type) {
+                    switch (entity.type) {
                         case 'weak': textureKey = 'enemy_weak'; break;
                         case 'strong': textureKey = 'enemy_strong'; break;
                         case 'fast': textureKey = 'enemy_fast'; break;
@@ -587,7 +594,7 @@ class PIXIRenderer {
                     sprite.texture = this.entityTextures.get(textureKey);
                 }
             }
-            
+
             this.animations.delete(entity);
         }
     }
@@ -618,9 +625,9 @@ class PIXIRenderer {
         let texture = this.tileTextures.get(tileType);
 
         // Проверяем, что текстура существует и имеет валидные размеры
-        const isValidTexture = texture && 
-                               texture.baseTexture && 
-                               (texture.baseTexture.width > 0 || (texture.width && texture.width > 0));
+        const isValidTexture = texture &&
+            texture.baseTexture &&
+            (texture.baseTexture.width > 0 || (texture.width && texture.width > 0));
 
         // Если текстура не создана или невалидна - создаём её заново
         if (!isValidTexture) {
@@ -629,7 +636,7 @@ class PIXIRenderer {
             // Пытаемся создать текстуру для известного типа тайла через Graphics
             if (tileType >= 0 && tileType <= 7) {
                 try {
-                    switch(tileType) {
+                    switch (tileType) {
                         case 0: texture = this.createFloorTexture(tileSize); break;
                         case 1: texture = this.createWallTexture(tileSize); break;
                         case 2: texture = this.createColumnTexture(tileSize); break;
@@ -689,7 +696,7 @@ class PIXIRenderer {
             // Создаем текстуру из графики
             const texture = this.app.renderer.generateTexture(graphics);
             graphics.destroy(); // Очищаем память
-            
+
             // Проверяем, что текстура имеет размеры
             if (texture && texture.width > 0 && texture.height > 0) {
                 return texture;
@@ -697,7 +704,7 @@ class PIXIRenderer {
         } catch (e) {
             console.error('Ошибка при создании текстуры пола:', e);
         }
-        
+
         // Fallback - создаём через canvas
         return this.createFallbackTexture(tileSize, this.hexToDecimal(this.colors.floor));
     }
@@ -742,14 +749,14 @@ class PIXIRenderer {
 
             const texture = this.app.renderer.generateTexture(graphics);
             graphics.destroy();
-            
+
             if (texture && texture.width > 0 && texture.height > 0) {
                 return texture;
             }
         } catch (e) {
             console.error('Ошибка при создании текстуры стены:', e);
         }
-        
+
         return this.createFallbackTexture(tileSize, this.hexToDecimal(this.colors.wall));
     }
 
@@ -791,14 +798,14 @@ class PIXIRenderer {
 
             const texture = this.app.renderer.generateTexture(graphics);
             graphics.destroy();
-            
+
             if (texture && texture.width > 0 && texture.height > 0) {
                 return texture;
             }
         } catch (e) {
             console.error('Ошибка при создании текстуры колонны:', e);
         }
-        
+
         return this.createFallbackTexture(tileSize, this.hexToDecimal(this.colors.wall));
     }
 
@@ -840,14 +847,14 @@ class PIXIRenderer {
 
             const texture = this.app.renderer.generateTexture(graphics);
             graphics.destroy();
-            
+
             if (texture && texture.width > 0 && texture.height > 0) {
                 return texture;
             }
         } catch (e) {
             console.error('Ошибка при создании текстуры дерева:', e);
         }
-        
+
         return this.createFallbackTexture(tileSize, this.hexToDecimal(this.colors.treeLeaves));
     }
 
@@ -888,14 +895,14 @@ class PIXIRenderer {
 
             const texture = this.app.renderer.generateTexture(graphics);
             graphics.destroy();
-            
+
             if (texture && texture.width > 0 && texture.height > 0) {
                 return texture;
             }
         } catch (e) {
             console.error('Ошибка при создании текстуры скалы:', e);
         }
-        
+
         return this.createFallbackTexture(tileSize, this.hexToDecimal(this.colors.rock));
     }
 
@@ -933,14 +940,14 @@ class PIXIRenderer {
 
             const texture = this.app.renderer.generateTexture(graphics);
             graphics.destroy();
-            
+
             if (texture && texture.width > 0 && texture.height > 0) {
                 return texture;
             }
         } catch (e) {
             console.error('Ошибка при создании текстуры воды:', e);
         }
-        
+
         return this.createFallbackTexture(tileSize, this.hexToDecimal(this.colors.water));
     }
 
@@ -979,14 +986,14 @@ class PIXIRenderer {
 
             const texture = this.app.renderer.generateTexture(graphics);
             graphics.destroy();
-            
+
             if (texture && texture.width > 0 && texture.height > 0) {
                 return texture;
             }
         } catch (e) {
             console.error('Ошибка при создании текстуры льда:', e);
         }
-        
+
         return this.createFallbackTexture(tileSize, this.hexToDecimal(this.colors.ice));
     }
 
@@ -1021,14 +1028,14 @@ class PIXIRenderer {
 
             const texture = this.app.renderer.generateTexture(graphics);
             graphics.destroy();
-            
+
             if (texture && texture.width > 0 && texture.height > 0) {
                 return texture;
             }
         } catch (e) {
             console.error('Ошибка при создании текстуры декорации:', e);
         }
-        
+
         return this.createFallbackTexture(tileSize, this.hexToDecimal(this.colors.decoration));
     }
 
@@ -1239,7 +1246,7 @@ class PIXIRenderer {
         // Плавная интерполяция зума
         if (Math.abs(this.camera.zoom - this.camera.targetZoom) > 0.01) {
             this.camera.zoom += (this.camera.targetZoom - this.camera.zoom) * GAME_CONFIG.CAMERA.ZOOM_SPEED;
-            
+
             // Обновляем масштаб основного контейнера
             this.mainContainer.scale.set(this.camera.zoom);
         } else {
@@ -1280,7 +1287,7 @@ class PIXIRenderer {
         // Обновляем позицию основного контейнера с учетом камеры
         this.mainContainer.x = (this.app.screen.width / 2) - (this.camera.x * this.camera.zoom);
         this.mainContainer.y = (this.app.screen.height / 2) - (this.camera.y * this.camera.zoom);
-        
+
         // Очищаем кэш чанков при перемещении камеры
         this.clearChunkCache();
     }
@@ -1344,10 +1351,10 @@ class PIXIRenderer {
         // Добавляем небольшой буфер для плавности
         const buffer = 64; // Пикселей
 
-        return x + width/2 > visibleLeft - buffer &&
-               x - width/2 < visibleRight + buffer &&
-               y + height/2 > visibleTop - buffer &&
-               y - height/2 < visibleBottom + buffer;
+        return x + width / 2 > visibleLeft - buffer &&
+            x - width / 2 < visibleRight + buffer &&
+            y + height / 2 > visibleTop - buffer &&
+            y - height / 2 < visibleBottom + buffer;
     }
 
     /**
@@ -1379,7 +1386,7 @@ class PIXIRenderer {
                 if (chunk && chunk.tiles) {
                     // Получаем закэшированный чанк или создаем новый
                     const chunkContainer = this.getCachedChunk(chunk);
-                    
+
                     // Проверяем, что чанк имеет детей (тайлы)
                     if (chunkContainer.children.length === 0) {
                         // Если чанк пустой, пересоздаем его
@@ -1467,7 +1474,7 @@ class PIXIRenderer {
     createFallbackTexture(tileSize, color) {
         const width = Math.max(tileSize, 2);
         const height = Math.max(Math.floor(tileSize / 2), 2);
-        
+
         // Создаём через canvas + BaseTexture - это самый надёжный способ
         const canvas = document.createElement('canvas');
         canvas.width = width;
@@ -1479,7 +1486,7 @@ class PIXIRenderer {
         // Создаём BaseTexture и Texture
         const baseTexture = new PIXI.BaseTexture(canvas);
         const texture = new PIXI.Texture(baseTexture);
-        
+
         // Проверяем, что текстура имеет размеры
         if (texture.width <= 0 || texture.height <= 0) {
             // Если размеры не установились автоматически, создаём минимальную текстуру
@@ -1489,10 +1496,10 @@ class PIXIRenderer {
             const minCtx = minCanvas.getContext('2d');
             minCtx.fillStyle = '#FF00FF';
             minCtx.fillRect(0, 0, 2, 2);
-            
+
             return new PIXI.Texture(new PIXI.BaseTexture(minCanvas));
         }
-        
+
         return texture;
     }
 
@@ -1868,69 +1875,6 @@ class PIXIRenderer {
         // mainContainer уже перемещен и масштабирован на основе камеры, поэтому используем только мировые координаты
         characterSprite.x = character.x;
         characterSprite.y = character.y;
-
-        // Рисуем индикатор здоровья
-        this.renderHealthBar(character, characterSprite.x, characterSprite.y - 25);
-    }
-
-    /**
-     * Рендеринг индикатора здоровья
-     * @param {Object} entity - объект с параметрами здоровья
-     * @param {number} x - X координата экрана
-     * @param {number} y - Y координата экрана
-     */
-    renderHealthBar(entity, x, y) {
-        const barWidth = GAME_CONFIG.RENDERER.HEALTH_BAR.WIDTH;
-        const barHeight = GAME_CONFIG.RENDERER.HEALTH_BAR.HEIGHT;
-        const healthPercent = entity.health / entity.maxHealth;
-
-        // Создаем или обновляем индикатор здоровья
-        let healthBarContainer = this.entitySprites.get(`${entity}_healthbar`);
-        if (!healthBarContainer) {
-            healthBarContainer = new PIXI.Container();
-
-            // Создаем спрайты для фона и заполнения
-            const backgroundSprite = new PIXI.Graphics();
-            backgroundSprite.beginFill(0x333333);
-            backgroundSprite.drawRect(0, 0, barWidth, barHeight);
-            backgroundSprite.endFill();
-            healthBarContainer.addChild(backgroundSprite);
-
-            const fillSprite = new PIXI.Graphics();
-            fillSprite.beginFill(0x4CAF50); // Начальный цвет - зеленый
-            fillSprite.drawRect(0, 0, barWidth * healthPercent, barHeight);
-            fillSprite.endFill();
-            healthBarContainer.addChild(fillSprite);
-
-            // Добавляем контейнер к UI слою
-            this.uiLayer.addChild(healthBarContainer);
-            this.entitySprites.set(`${entity}_healthbar`, healthBarContainer);
-        } else if (!healthBarContainer.parent) {
-            // Если контейнер есть в кэше, но не в дереве сцены, добавляем его
-            this.uiLayer.addChild(healthBarContainer);
-        }
-
-        // Обновляем позицию контейнера
-        healthBarContainer.x = x - barWidth / 2;
-        healthBarContainer.y = y + GAME_CONFIG.RENDERER.HEALTH_BAR.OFFSET_Y;
-
-        // Обновляем заполнение полосы здоровья
-        const fillSprite = healthBarContainer.children[1]; // Второй элемент - заполнение
-        fillSprite.clear();
-
-        // Определяем цвет в зависимости от уровня здоровья
-        let healthColor;
-        if (healthPercent > GAME_CONFIG.RENDERER.HEALTH_BAR.HEALTH_COLOR_THRESHOLD_HIGH) {
-            healthColor = 0x4CAF50; // Зеленый
-        } else if (healthPercent > GAME_CONFIG.RENDERER.HEALTH_BAR.HEALTH_COLOR_THRESHOLD_MEDIUM) {
-            healthColor = 0xFFC107; // Желтый
-        } else {
-            healthColor = 0xF44336; // Красный
-        }
-
-        fillSprite.beginFill(healthColor);
-        fillSprite.drawRect(0, 0, barWidth * healthPercent, barHeight);
-        fillSprite.endFill();
     }
 
     /**
@@ -1943,7 +1887,7 @@ class PIXIRenderer {
         if (!enemySprite) {
             // Определяем текстуру в зависимости от типа врага
             let textureKey = 'enemy_basic';
-            switch(enemy.type) {
+            switch (enemy.type) {
                 case 'weak':
                     textureKey = 'enemy_weak';
                     break;
@@ -1962,9 +1906,9 @@ class PIXIRenderer {
             if (!texture || !texture.valid) {
                 console.warn(`Текстура врага ${textureKey} невалидна, создаем резервную`);
                 const fallbackColor = enemy.type === 'weak' ? 0xa0a0a0 :
-                                      enemy.type === 'strong' ? 0xff6600 :
-                                      enemy.type === 'fast' ? 0xffff00 :
-                                      enemy.type === 'tank' ? 0x8b0000 : 0xff4a4a;
+                    enemy.type === 'strong' ? 0xff6600 :
+                        enemy.type === 'fast' ? 0xffff00 :
+                            enemy.type === 'tank' ? 0x8b0000 : 0xff4a4a;
                 texture = this.createFallbackTexture(32, fallbackColor);
                 this.entityTextures.set(textureKey, texture);
             }
@@ -1973,9 +1917,9 @@ class PIXIRenderer {
             if (!texture || !texture.valid) {
                 // Последняя попытка создать текстуру через canvas
                 const fallbackColor = enemy.type === 'weak' ? 0xa0a0a0 :
-                                      enemy.type === 'strong' ? 0xff6600 :
-                                      enemy.type === 'fast' ? 0xffff00 :
-                                      enemy.type === 'tank' ? 0x8b0000 : 0xff4a4a;
+                    enemy.type === 'strong' ? 0xff6600 :
+                        enemy.type === 'fast' ? 0xffff00 :
+                            enemy.type === 'tank' ? 0x8b0000 : 0xff4a4a;
                 const canvas = document.createElement('canvas');
                 canvas.width = 32;
                 canvas.height = 32;
@@ -2000,9 +1944,6 @@ class PIXIRenderer {
         // mainContainer уже перемещен и масштабирован на основе камеры, поэтому используем только мировые координаты
         enemySprite.x = enemy.x;
         enemySprite.y = enemy.y;
-
-        // Рисуем индикатор здоровья врага
-        this.renderHealthBar(enemy, enemySprite.x, enemySprite.y - 25);
     }
 
 
@@ -2038,10 +1979,10 @@ class PIXIRenderer {
     clear() {
         // Очищаем слой тайлов
         this.tileLayer.removeChildren();
-        
+
         // Очищаем слой UI
         this.uiLayer.removeChildren();
-        
+
         // НЕ очищаем objectLayer полностью - сохраняем спрайты сущностей
         // Вместо этого очищаем только временные объекты (частицы, эффекты)
         // Спрайты персонажей и врагов остаются в слое и просто обновляются по позиции
@@ -2072,7 +2013,7 @@ class PIXIRenderer {
             alpha: 1,
             rotation: Math.random() * Math.PI * 2
         };
-        
+
         this.particles.push(particle);
         return particle;
     }
@@ -2086,14 +2027,14 @@ class PIXIRenderer {
     createDamageEffect(x, y, damage) {
         // Создаем частицы для визуализации урона
         const particleCount = Math.min(20, Math.floor(damage / 10) + 5); // Больше частиц для большего урона
-        
+
         for (let i = 0; i < particleCount; i++) {
             const angle = Math.random() * Math.PI * 2;
             const speed = 1 + Math.random() * 2;
             const vx = Math.cos(angle) * speed;
             const vy = Math.sin(angle) * speed;
             const lifetime = 500 + Math.random() * 1000; // 0.5-1.5 секунд
-            
+
             this.createParticle(
                 x, y,
                 0xFF0000, // Красный цвет для урона
@@ -2113,7 +2054,7 @@ class PIXIRenderer {
     createHealEffect(x, y, heal) {
         // Создаем частицы для визуализации лечения
         const particleCount = Math.min(15, Math.floor(heal / 5) + 3); // Больше частиц для большего лечения
-        
+
         for (let i = 0; i < particleCount; i++) {
             const angle = Math.random() * Math.PI * 2;
             const speed = 0.5 + Math.random() * 1.5;
@@ -2121,11 +2062,11 @@ class PIXIRenderer {
             const vy = Math.sin(angle) * speed;
             const lifetime = 800 + Math.random() * 1200; // 0.8-2 секунды
             const hue = 120 + Math.random() * 60; // Оттенки зеленого
-            
+
             // Преобразуем HSV в RGB для получения зеленоватого цвета
             const rgb = this.hsvToRgb(hue / 360, 1, 1);
             const color = (rgb.r << 16) + (rgb.g << 8) + rgb.b;
-            
+
             this.createParticle(
                 x, y,
                 color,
@@ -2177,14 +2118,14 @@ class PIXIRenderer {
      */
     createExplosionEffect(x, y, size = 5, color = 0xFFA500) {
         const particleCount = 30 + Math.floor(size * 2);
-        
+
         for (let i = 0; i < particleCount; i++) {
             const angle = Math.random() * Math.PI * 2;
             const speed = 1 + Math.random() * 5;
             const vx = Math.cos(angle) * speed;
             const vy = Math.sin(angle) * speed;
             const lifetime = 300 + Math.random() * 700; // 0.3-1 секунда
-            
+
             this.createParticle(
                 x, y,
                 color,
@@ -2207,11 +2148,11 @@ class PIXIRenderer {
         const steps = 20;
         const dx = (endX - startX) / steps;
         const dy = (endY - startY) / steps;
-        
+
         for (let i = 0; i < steps; i++) {
             const x = startX + dx * i;
             const y = startY + dy * i;
-            
+
             // Создаем частицы вдоль траектории
             if (Math.random() > 0.7) { // Не на каждой точке
                 this.createParticle(
@@ -2236,14 +2177,14 @@ class PIXIRenderer {
     createDamageTakenEffect(x, y, damage, isCritical = false) {
         // Основные частицы крови
         const particleCount = Math.min(25, 5 + Math.floor(damage / 5));
-        
+
         for (let i = 0; i < particleCount; i++) {
             const angle = Math.random() * Math.PI * 2;
             const speed = 0.5 + Math.random() * 3;
             const vx = Math.cos(angle) * speed;
             const vy = Math.sin(angle) * speed;
             const lifetime = 400 + Math.random() * 600; // 0.4-1 секунда
-            
+
             this.createParticle(
                 x, y,
                 0x8B0000, // Темно-красный
@@ -2252,7 +2193,7 @@ class PIXIRenderer {
                 lifetime
             );
         }
-        
+
         // Если урон критический, добавляем дополнительные эффекты
         if (isCritical) {
             this.createExplosionEffect(x, y, 3, 0xFF0000); // Красный взрыв для крита
@@ -2266,21 +2207,21 @@ class PIXIRenderer {
     updateParticles(deltaTime) {
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const particle = this.particles[i];
-            
+
             // Обновляем позицию
             particle.x += particle.velocityX;
             particle.y += particle.velocityY;
-            
+
             // Применяем гравитацию
             particle.velocityY += 0.1;
-            
+
             // Обновляем возраст
             particle.age += deltaTime;
-            
+
             // Обновляем прозрачность
             const lifeRatio = particle.age / particle.lifetime;
             particle.alpha = 1 - lifeRatio;
-            
+
             // Удаляем устаревшие частицы
             if (particle.age >= particle.lifetime) {
                 this.particles.splice(i, 1);
@@ -2512,7 +2453,7 @@ class PIXIRenderer {
                 textSprite.scale.set(effect.scale);
                 textSprite.alpha = effect.alpha;
                 textSprite.visible = true;
-                
+
                 // Помечаем как текст уровня для очистки
                 textSprite.isLevelUpText = true;
 
@@ -2715,7 +2656,7 @@ class PIXIRenderer {
         const ctx = canvas.getContext('2d');
 
         // Рисуем круг с радиальным градиентом (от центра к краям)
-        const gradient = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+        const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
         gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
         gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.8)');
         gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.3)');
@@ -2723,13 +2664,13 @@ class PIXIRenderer {
 
         ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.arc(size/2, size/2, size/2, 0, Math.PI * 2);
+        ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
         ctx.fill();
 
         // Создаём текстуру из canvas
         const baseTexture = new PIXI.BaseTexture(canvas);
         const texture = new PIXI.Texture(baseTexture);
-        
+
         this.flashTextureCache = texture;
         return texture;
     }
@@ -2890,6 +2831,49 @@ class PIXIRenderer {
     }
 
     /**
+     * Инициализация системы полосок здоровья для врагов
+     */
+    initEnemyHealthBars() {
+        if (!this.enemyHealthBars) {
+            this.enemyHealthBars = new EnemyHealthBarSystem(this);
+        }
+    }
+
+    /**
+     * Обновление полосок здоровья врагов
+     * @param {number} deltaTime - время с последнего обновления в мс
+     */
+    updateEnemyHealthBars(deltaTime) {
+        if (this.enemyHealthBars) {
+            this.enemyHealthBars.updateAll(deltaTime);
+        }
+    }
+
+    /**
+     * Обновление или создание полоски здоровья для врага
+     * @param {Enemy} enemy - враг
+     * @param {boolean} justHit - только что получил урон
+     */
+    updateEnemyHealthBar(enemy, justHit = false) {
+        if (this.enemyHealthBars) {
+            console.log(`[PIXIRenderer] updateEnemyHealthBar вызван для: ${enemy.name || enemy.type}`);
+            this.enemyHealthBars.update(enemy, enemy.health, enemy.maxHealth, justHit);
+        } else {
+            console.warn('[PIXIRenderer] enemyHealthBars не инициализирован!');
+        }
+    }
+
+    /**
+     * Удаление полоски здоровья для врага
+     * @param {Enemy} enemy - враг
+     */
+    removeEnemyHealthBar(enemy) {
+        if (this.enemyHealthBars) {
+            this.enemyHealthBars.remove(enemy);
+        }
+    }
+
+    /**
      * Отрисовка боевых эффектов на PIXI слоях
      */
     renderCombatEffects() {
@@ -2975,7 +2959,7 @@ class PIXIRenderer {
                 textSprite.scale.set(effect.scale);
                 textSprite.alpha = effect.alpha;
                 textSprite.visible = true;
-                
+
                 // Помечаем как боевой текст для очистки
                 textSprite.isCombatText = true;
 
@@ -3086,14 +3070,14 @@ class PIXIRenderer {
         if (entities.length <= this.maxVisibleEntities) {
             return entities;
         }
-        
+
         // Сортируем сущности по расстоянию до камеры и возвращаем ближайшие
         const sortedEntities = entities.slice().sort((a, b) => {
             const distA = Math.sqrt(Math.pow(a.x - this.camera.x, 2) + Math.pow(a.y - this.camera.y, 2));
             const distB = Math.sqrt(Math.pow(b.x - this.camera.x, 2) + Math.pow(b.y - this.camera.y, 2));
             return distA - distB;
         });
-        
+
         return sortedEntities.slice(0, this.maxVisibleEntities);
     }
 
@@ -3384,7 +3368,7 @@ class PIXIRenderer {
             // Преобразуем мировые координаты в экранные для проверки
             const screenX = this.app.screen.width / 2 + (worldX - this.camera.x) * zoom;
             const screenY = this.app.screen.height / 2 + (worldY - this.camera.y) * zoom;
-            
+
             const buffer = 100;
             if (screenX < -buffer || screenX > this.app.screen.width + buffer ||
                 screenY < -buffer || screenY > this.app.screen.height + buffer) {

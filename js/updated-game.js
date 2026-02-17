@@ -71,6 +71,9 @@ class Game {
         // Создаем систему боевых эффектов
         this.combatEffects = new CombatEffectsSystem(this.renderer);
 
+        // Инициализируем систему полосок здоровья для врагов
+        this.renderer.initEnemyHealthBars();
+
         // Переменная для отслеживания подсвеченного предмета
         this.hoveredItemDrop = null;
 
@@ -268,7 +271,6 @@ class Game {
 
             if (distance <= attackRange) {
                 const damage = this.character.attack(enemy);
-                console.log(`Атакован враг, нанесено урона: ${damage}`);
 
                 // Если враг умер, удаляем его
                 if (!enemy.isAlive()) {
@@ -359,7 +361,6 @@ class Game {
 
             if (distance <= GAME_CONFIG.ATTACK.RANGE) { // В радиусе атаки
                 const damage = this.character.attack(clickedEnemy);
-                console.log(`Атакован враг, нанесено урона: ${damage}`);
 
                 // Если враг умер, удаляем его
                 if (!clickedEnemy.isAlive()) {
@@ -671,16 +672,7 @@ class Game {
                 }
                 this.renderer.entitySprites.delete(enemy);
             }
-            
-            // Удаляем полоску здоровья врага
-            const healthBar = this.renderer.entitySprites.get(`${enemy}_healthbar`);
-            if (healthBar) {
-                if (healthBar.parent) {
-                    healthBar.parent.removeChild(healthBar);
-                }
-                this.renderer.entitySprites.delete(`${enemy}_healthbar`);
-            }
-            
+
             this.enemies.splice(index, 1);
         }
     }
@@ -903,6 +895,11 @@ class Game {
 
         // Обновляем боевые эффекты
         this.combatEffects.update(deltaTime);
+
+        // Обновляем полоски здоровья врагов
+        if (this.renderer.updateEnemyHealthBars) {
+            this.renderer.updateEnemyHealthBars(deltaTime);
+        }
 
         // Обновляем UI каждый кадр для отзывчивости
         this.updateCharacterUI();

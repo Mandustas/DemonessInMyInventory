@@ -284,7 +284,6 @@ class Enemy {
         if (this.attackCooldown === 0) {
             // Вызываем эффект атаки
             if (typeof game !== 'undefined' && game.combatEffects) {
-                console.log('Вызов эффекта атаки для врага', this.x, this.y);
                 game.combatEffects.triggerAttack(this.x, this.y, 'enemy');
             } else {
                 console.warn('Боевая система эффектов не доступна при атаке врагом');
@@ -322,7 +321,6 @@ class Enemy {
             } else {
                 // Промах - вызываем эффект уворота для цели
                 if (typeof game !== 'undefined' && game.combatEffects) {
-                    console.log('Вызов эффекта уворота для цели', target.x, target.y);
                     game.combatEffects.triggerDodge(target.x, target.y);
                 }
                 console.log('Враг промахнулся!');
@@ -347,10 +345,14 @@ class Enemy {
 
         // Вызываем эффект получения урона
         if (typeof game !== 'undefined' && game.combatEffects) {
-            console.log('Вызов эффекта получения урона для врага', this.x, this.y, actualDamage, isCritical);
             game.combatEffects.triggerDamage(this.x, this.y, actualDamage, isCritical);
         } else {
             console.warn('Боевая система эффектов не доступна при получении урона врагом');
+        }
+
+        // Обновляем полоску здоровья (показываем при получении урона)
+        if (typeof game !== 'undefined' && game.renderer && game.renderer.updateEnemyHealthBar) {
+            game.renderer.updateEnemyHealthBar(this, true); // true = только что получил урон
         }
 
         if (this.health <= 0) {

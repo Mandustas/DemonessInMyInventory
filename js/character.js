@@ -102,7 +102,6 @@ class Character {
 
         // Вызываем эффект получения урона
         if (typeof game !== 'undefined' && game.combatEffects) {
-            console.log('Вызов эффекта получения урона для персонажа', this.x, this.y, actualDamage, isCritical);
             game.combatEffects.triggerDamage(this.x, this.y, actualDamage, isCritical);
         } else {
             console.warn('Боевая система эффектов не доступна при получении урона персонажем');
@@ -133,7 +132,6 @@ class Character {
     attack(target) {
         // Вызываем эффект атаки
         if (typeof game !== 'undefined' && game.combatEffects) {
-            console.log('Вызов эффекта атаки для персонажа', this.x, this.y);
             game.combatEffects.triggerAttack(this.x, this.y, 'player');
         } else {
             console.warn('Боевая система эффектов не доступна при атаке персонажем');
@@ -169,8 +167,7 @@ class Character {
         } else {
             // Промах - вызываем эффект уворота для цели
             if (typeof game !== 'undefined' && game.combatEffects) {
-                console.log('Вызов эффекта уворота для цели', target.x, target.y);
-                game.combatEffects.triggerDodge(target.x, target.y);
+С                game.combatEffects.triggerDodge(target.x, target.y);
             }
             console.log('Промах!');
             return 0;
