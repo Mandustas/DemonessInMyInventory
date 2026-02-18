@@ -69,13 +69,23 @@ class LightingSystem {
      * Установка позиции источника света
      * @param {number} x - X координата в мировых координатах
      * @param {number} y - Y координата в мировых координатах
+     * @param {boolean} forceClear - принудительная очистка кэша
      */
-    setLightSource(x, y) {
+    setLightSource(x, y, forceClear = false) {
+        // Проверяем, насколько переместился источник света
+        const dx = x - this.lightSourceX;
+        const dy = y - this.lightSourceY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Обновляем позицию
         this.lightSourceX = x;
         this.lightSourceY = y;
         
-        // Очищаем кэш при изменении позиции источника
-        this.clearCache();
+        // Очищаем кэш при любом перемещении (для корректного динамического освещения)
+        // или при принудительной очистке
+        if (forceClear || distance > 1) { // Очищаем при перемещении более 1 пикселя
+            this.clearCache();
+        }
     }
     
     /**
@@ -116,38 +126,37 @@ class LightingSystem {
     }
     
     /**
-     * Вычисление расстояния от источника света до тайла
-     * @param {number} tileX - X координата тайла
-     * @param {number} tileY - Y координата тайла
+     * Вычисление расстояния от источника света до точки
+     * @param {number} worldX - X координата в мировых координатах
+     * @param {number} worldY - Y координата в мировых координатах
      * @returns {number} - расстояние в тайлах
      */
-    getDistanceToLight(tileX, tileY) {
-        // Преобразуем координаты тайла в мировые координаты
-        const tileWorldX = tileX * GAME_CONFIG.TILE_DIMENSIONS.WIDTH;
-        const tileWorldY = tileY * GAME_CONFIG.TILE_DIMENSIONS.HEIGHT;
+    getDistanceToLight(worldX, worldY) {
+        // worldX и worldY уже в мировых координатах
+        const tileSize = GAME_CONFIG.TILE.BASE_SIZE;
         
-        const dx = tileWorldX - this.lightSourceX;
-        const dy = tileWorldY - this.lightSourceY;
+        const dx = worldX - this.lightSourceX;
+        const dy = worldY - this.lightSourceY;
         
         // Возвращаем расстояние в "тайлах"
-        return Math.sqrt(dx * dx + dy * dy) / GAME_CONFIG.TILE.BASE_SIZE;
+        return Math.sqrt(dx * dx + dy * dy) / tileSize;
     }
     
     /**
-     * Вычисление направления от тайла к источнику света
-     * @param {number} tileX - X координата тайла
-     * @param {number} tileY - Y координата тайла
+     * Вычисление направления от точки к источнику света
+     * @param {number} worldX - X координата в мировых координатах
+     * @param {number} worldY - Y координата в мировых координатах
      * @returns {Object} - нормализованный вектор направления
      */
-    getLightDirection(tileX, tileY) {
-        const tileWorldX = tileX * GAME_CONFIG.TILE_DIMENSIONS.WIDTH;
-        const tileWorldY = tileY * GAME_CONFIG.TILE_DIMENSIONS.HEIGHT;
+    getLightDirection(worldX, worldY) {
+        // worldX и worldY уже в мировых координатах
+        const tileSize = GAME_CONFIG.TILE.BASE_SIZE;
         
-        const dx = this.lightSourceX - tileWorldX;
-        const dy = this.lightSourceY - tileWorldY;
+        const dx = this.lightSourceX - worldX;
+        const dy = this.lightSourceY - worldY;
         
         // Добавляем компонент Z для 3D эффекта (свет идёт сверху)
-        const dz = GAME_CONFIG.TILE.BASE_SIZE * 2; // Высота источника света
+        const dz = tileSize * 2; // Высота источника света
         
         const length = Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (length === 0) return { x: 0, y: 0, z: 1 };
@@ -170,21 +179,21 @@ class LightingSystem {
     }
     
     /**
-     * Вычисление интенсивности освещения для тайла
-     * @param {number} tileX - X координата тайла
-     * @param {number} tileY - Y координата тайла
+     * Вычисление интенсивности освещения для точки
+     * @param {number} worldX - X координата в мировых координатах
+     * @param {number} worldY - Y координата в мировых координатах
      * @param {number} tileType - тип тайла
      * @returns {number} - интенсивность от 0 до 1
      */
-    calculateLighting(tileX, tileY, tileType) {
-        // Проверяем кэш
-        const cacheKey = `${tileX},${tileY},${tileType}`;
+    calculateLighting(worldX, worldY, tileType) {
+        // Проверяем кэш (используем округлённые координаты для эффективности кэша)
+        const cacheKey = `${Math.floor(worldX)},${Math.floor(worldY)},${tileType}`;
         if (this.lightingCache.has(cacheKey)) {
             return this.lightingCache.get(cacheKey);
         }
         
         // Вычисляем расстояние до источника света
-        const distance = this.getDistanceToLight(tileX, tileY);
+        const distance = this.getDistanceToLight(worldX, worldY);
         
         // Если за пределами радиуса, возвращаем только фоновое освещение
         if (distance > this.radius) {
@@ -199,7 +208,7 @@ class LightingSystem {
         const normal = this.normals.get(tileType) || { x: 0, y: 0, z: 1 };
         
         // Получаем направление к источнику света
-        const lightDir = this.getLightDirection(tileX, tileY);
+        const lightDir = this.getLightDirection(worldX, worldY);
         
         // Вычисляем dot product для определения угла падения света
         let dot = this.dotProduct(normal, lightDir);
@@ -261,21 +270,21 @@ class LightingSystem {
     }
     
     /**
-     * Получение освещённого цвета для тайла
-     * @param {number} tileX - X координата тайла
-     * @param {number} tileY - Y координата тайла
+     * Получение освещённого цвета для точки
+     * @param {number} worldX - X координата в мировых координатах
+     * @param {number} worldY - Y координата в мировых координатах
      * @param {number} tileType - тип тайла
      * @returns {number} - цвет в формате PIXI (0xRRGGBB) для tint
      */
-    getLitColor(tileX, tileY, tileType) {
-        // Проверяем кэш
-        const cacheKey = `${tileX},${tileY},${tileType}`;
+    getLitColor(worldX, worldY, tileType) {
+        // Проверяем кэш (используем округлённые координаты для эффективности кэша)
+        const cacheKey = `${Math.floor(worldX)},${Math.floor(worldY)},${tileType}`;
         if (this.tileColorCache.has(cacheKey)) {
             return this.tileColorCache.get(cacheKey);
         }
         
         // Получаем интенсивность освещения
-        const intensity = this.calculateLighting(tileX, tileY, tileType);
+        const intensity = this.calculateLighting(worldX, worldY, tileType);
         
         // Получаем цвет света (тёплый оттенок)
         const lightColor = this.config.LIGHT_COLOR;
@@ -307,12 +316,12 @@ class LightingSystem {
     /**
      * Применение освещения к спрайту тайла
      * @param {PIXI.Sprite} sprite - спрайт тайла
-     * @param {number} tileX - X координата тайла
-     * @param {number} tileY - Y координата тайла
+     * @param {number} worldX - X координата в мировых координатах
+     * @param {number} worldY - Y координата в мировых координатах
      * @param {number} tileType - тип тайла
      */
-    applyLightingToSprite(sprite, tileX, tileY, tileType) {
-        const litColor = this.getLitColor(tileX, tileY, tileType);
+    applyLightingToSprite(sprite, worldX, worldY, tileType) {
+        const litColor = this.getLitColor(worldX, worldY, tileType);
         sprite.tint = litColor;
     }
     

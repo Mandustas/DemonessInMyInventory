@@ -1495,9 +1495,17 @@ class PIXIRenderer {
                 sprite.x = pos.x;
                 sprite.y = pos.y;
 
+                // Сохраняем тип тайла в спрайте для динамического освещения
+                sprite.tileType = tileType;
+                sprite.tileX = globalX;
+                sprite.tileY = globalY;
+                // Сохраняем мировые координаты для правильного расчёта освещения
+                sprite.worldX = pos.x;
+                sprite.worldY = pos.y;
+
                 // Применяем освещение к спрайту, если система освещения активна
                 if (this.lightingSystem) {
-                    this.lightingSystem.applyLightingToSprite(sprite, globalX, globalY, tileType);
+                    this.lightingSystem.applyLightingToSprite(sprite, pos.x, pos.y, tileType);
                 }
 
                 chunkContainer.addChild(sprite);
@@ -1533,6 +1541,35 @@ class PIXIRenderer {
 
         // Очищаем кэш чанков для пересоздания с новым освещением
         this.chunkCache.clear();
+    }
+    
+    /**
+     * Обновление освещения для видимых чанков в реальном времени
+     * Вызывается каждый кадр для динамического освещения
+     */
+    updateDynamicLighting() {
+        if (!this.lightingSystem) return;
+
+        // Проходим по всем видимым чанкам и обновляем tint спрайтов
+        for (const [chunkKey, chunkContainer] of this.chunkCache.entries()) {
+            if (!chunkContainer || !chunkContainer.children) continue;
+            
+            // Обновляем tint для каждого спрайта в чанке
+            for (const sprite of chunkContainer.children) {
+                if (!sprite || sprite.destroyed) continue;
+                
+                // Используем сохранённые мировые координаты
+                const worldX = sprite.worldX;
+                const worldY = sprite.worldY;
+                const tileType = sprite.tileType;
+                
+                // Если координаты не сохранены, пропускаем
+                if (worldX === undefined || worldY === undefined) continue;
+                
+                // Применяем освещение с мировыми координатами
+                this.lightingSystem.applyLightingToSprite(sprite, worldX, worldY, tileType);
+            }
+        }
     }
 
     /**
@@ -3571,6 +3608,9 @@ class PIXIRenderer {
      * @param {ChunkSystem} chunkSystem - система чанков
      */
     renderBackgroundTiles(map, chunkSystem) {
+        // Обновляем динамическое освещение каждый кадр
+        this.updateDynamicLighting();
+        
         // Рендерим фоновые тайлы (пол, вода, лед и т.д.) без участия в глубинной сортировке
         this.renderTiles(map, chunkSystem);
     }
