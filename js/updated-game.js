@@ -75,6 +75,20 @@ class Game {
         this.lightingSystem = new LightingSystem(GAME_CONFIG.LIGHTING);
         this.renderer.setLightingSystem(this.lightingSystem);
 
+        // Инициализируем менеджер факелов
+        this.torchManager = new TorchManager(this.lightingSystem);
+        this.torchManager.init();
+
+        // Инициализируем менеджер снарядов
+        this.projectileManager = new ProjectileManager(this.lightingSystem);
+        this.projectileManager.init();
+
+        // Переменные для подсчёта FPS
+        this.lastTime = 0;
+        this.fpsUpdateTime = 0;
+        this.frameCount = 0;
+        this.fps = 0;
+
         // Переменная для отслеживания подсвеченного предмета
         this.hoveredItemDrop = null;
 
@@ -284,25 +298,93 @@ class Game {
         const skillRange = GAME_CONFIG.ATTACK.SKILL_RANGE; // Радиус действия навыка
         let usedSkill = false;
 
-        for (const enemy of this.enemies) {
-            const distance = Math.sqrt(
-                Math.pow(this.character.x - enemy.x, 2) +
-                Math.pow(this.character.y - enemy.y, 2)
-            );
+        // Для файрбола используем специальную логику с снарядом
+        if (skillName === 'fireball') {
+            // Ищем ближайшего врага
+            let nearestEnemy = null;
+            let nearestDistance = Infinity;
 
-            if (distance <= skillRange) {
-                const result = this.character.useSkill(skillName, enemy);
-                console.log(`Использован навык ${skillName} на враге, результат: ${result}`);
+            for (const enemy of this.enemies) {
+                const distance = Math.sqrt(
+                    Math.pow(this.character.x - enemy.x, 2) +
+                    Math.pow(this.character.y - enemy.y, 2)
+                );
+
+                if (distance <= skillRange && distance < nearestDistance) {
+                    nearestEnemy = enemy;
+                    nearestDistance = distance;
+                }
+            }
+
+            if (nearestEnemy) {
+                this.launchFireball(nearestEnemy.x, nearestEnemy.y);
                 usedSkill = true;
-                break; // Используем навык только на одном враге
+            } else {
+                // Если нет врагов, запускаем файрбол в направлении взгляда
+                this.launchFireball(
+                    this.character.x + 100 * Math.cos(0),
+                    this.character.y + 100 * Math.sin(0)
+                );
+                usedSkill = true;
+            }
+        } else {
+            // Стандартная логика для других навыков
+            for (const enemy of this.enemies) {
+                const distance = Math.sqrt(
+                    Math.pow(this.character.x - enemy.x, 2) +
+                    Math.pow(this.character.y - enemy.y, 2)
+                );
+
+                if (distance <= skillRange) {
+                    const result = this.character.useSkill(skillName, enemy);
+                    console.log(`Использован навык ${skillName} на враге, результат: ${result}`);
+                    usedSkill = true;
+                    break;
+                }
+            }
+
+            if (!usedSkill) {
+                // Если нет врагов в радиусе, используем навык без цели (например, лечение)
+                const result = this.character.useSkill(skillName);
+                console.log(`Использован навык ${skillName} без цели, результат: ${result}`);
             }
         }
+    }
 
-        if (!usedSkill) {
-            // Если нет врагов в радиусе, используем навык без цели (например, лечение)
-            const result = this.character.useSkill(skillName);
-            console.log(`Использован навык ${skillName} без цели, результат: ${result}`);
+    /**
+     * Запуск огненного шара
+     * @param {number} targetX - X координата цели
+     * @param {number} targetY - Y координата цели
+     */
+    launchFireball(targetX, targetY) {
+        if (!this.projectileManager || !this.character) return;
+
+        // Проверяем, изучен ли навык
+        const skill = this.character.skills['fireball'];
+        if (!skill || skill.level === 0) {
+            console.log('Навык Огненный шар не изучен');
+            return;
         }
+
+        // Проверяем и списываем ману
+        const manaCost = this.character.getSkillManaCost('fireball');
+        if (!this.character.consumeMana(manaCost)) {
+            console.log('Недостаточно маны для Огненного шара');
+            return;
+        }
+
+        // Создаём файрбол
+        const fireball = FireballFactory.createFromCharacter(
+            this.character,
+            targetX,
+            targetY,
+            skill
+        );
+
+        // Добавляем в менеджер снарядов
+        this.projectileManager.addProjectile(fireball);
+
+        console.log(`Запущен Огненный шар в направлении (${targetX.toFixed(0)}, ${targetY.toFixed(0)})`);
     }
 
     /**
@@ -851,6 +933,11 @@ class Game {
             this.lastChunkX = currentChunkX;
             this.lastChunkY = currentChunkY;
             this.chunkSystem.loadChunksAround(currentTilePos.tileX, currentTilePos.tileY);
+            
+            // Генерируем факелы в новых чанках
+            if (this.torchManager) {
+                this.torchManager.generateTorches(this.chunkSystem.chunks, GAME_CONFIG.TILE.BASE_SIZE);
+            }
         }
 
         // Обновляем спаун врагов (реже - раз в 60 кадров)
@@ -902,6 +989,27 @@ class Game {
         // Обновляем полоски здоровья врагов
         if (this.renderer.updateEnemyHealthBars) {
             this.renderer.updateEnemyHealthBars(deltaTime);
+        }
+
+        // Обновляем систему освещения
+        if (this.lightingSystem) {
+            this.lightingSystem.update(deltaTime);
+        }
+
+        // Обновляем факелы
+        if (this.torchManager) {
+            this.torchManager.update(deltaTime);
+            
+            // Периодически очищаем далёкие факелы (каждые 60 кадров)
+            if (this.updateCounter % 60 === 0) {
+                const unloadDistance = (GAME_CONFIG.LIGHTING.TORCH.UNLOAD_DISTANCE || 20) * GAME_CONFIG.TILE.BASE_SIZE;
+                this.torchManager.cullTorches(this.character.x, this.character.y, unloadDistance);
+            }
+        }
+
+        // Обновляем снаряды
+        if (this.projectileManager) {
+            this.projectileManager.update(deltaTime, this.enemies);
         }
 
         // Обновляем UI каждый кадр для отзывчивости
@@ -1136,6 +1244,16 @@ class Game {
         // Рендерим боевые эффекты
         this.combatEffects.render(deltaTime);
 
+        // Рендерим факелы
+        if (this.torchManager) {
+            this.torchManager.render(this.renderer);
+        }
+
+        // Рендерим снаряды
+        if (this.projectileManager) {
+            this.projectileManager.render(this.renderer);
+        }
+
         // При необходимости рендерим сетку (для отладки)
         // this.renderer.renderGrid();
     }
@@ -1147,6 +1265,20 @@ class Game {
         // Вычисляем deltaTime в миллисекундах
         const deltaTime = currentTime - (this.lastTime || currentTime);
         this.lastTime = currentTime;
+
+        // Подсчёт FPS
+        this.frameCount++;
+        if (currentTime - this.fpsUpdateTime >= 1000) {
+            this.fps = this.frameCount;
+            this.frameCount = 0;
+            this.fpsUpdateTime = currentTime;
+            
+            // Обновляем отображение FPS
+            const fpsElement = document.getElementById('fpsCounter');
+            if (fpsElement) {
+                fpsElement.textContent = this.fps;
+            }
+        }
 
         this.update(deltaTime);
         this.render(deltaTime);
