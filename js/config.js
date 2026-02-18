@@ -363,8 +363,21 @@ const GAME_CONFIG = {
         TELEPORT_ON_RIGHT_CLICK: true  // Включить телепортацию по правому клику
     },
 
-    // Настройки системы освещения
-    LIGHTING: {
+  // Настройки оптимизации производительности
+  OPTIMIZATION: {
+    CHUNK_CACHE_MAX_SIZE: 50,           // Максимальное количество чанков в кэше
+    CHUNK_UNLOAD_DISTANCE: 3,           // Чанков от игрока для выгрузки
+    ENTITY_CULLING_MARGIN: 100,         // Пикселей за пределами экрана для culling
+    SPATIAL_HASH_CELL_SIZE: 128,        // Размер ячейки для пространственного хеширования
+    LIGHTING_UPDATE_RADIUS: 8,          // Тайлов от игрока для обновления освещения
+    LIGHTING_CACHE_TTL: 5000,           // Время жизни кэша освещения в мс
+    PARTICLE_CULLING_ENABLED: true,     // Включить culling для частиц
+    DISTANT_ENTITY_UPDATE_INTERVAL: 3,  // Обновлять далёких врагов каждые N кадров
+    CHUNK_UNLOAD_THRESHOLD: 512         // Порог расстояния для очистки кэша чанков (в пикселях)
+  },
+  
+  // Настройки системы освещения
+  LIGHTING: {
         DEFAULT_RADIUS: 6,            // Радиус освещения в тайлах (уменьшено для производительности)
         MIN_RADIUS: 3,                // Минимальный радиус
         MAX_RADIUS: 15,               // Максимальный радиус

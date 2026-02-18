@@ -1626,6 +1626,11 @@ class PIXIRenderer {
      * @param {number} y - Y координата камеры
      */
     setCameraPosition(x, y) {
+        // Вычисляем расстояние перемещения для оптимизации очистки кэша
+        const dx = x - this.camera.x;
+        const dy = y - this.camera.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
         this.camera.x = x;
         this.camera.y = y;
 
@@ -1636,8 +1641,12 @@ class PIXIRenderer {
         this.mainContainer.x = centerX - (this.camera.x * this.camera.zoom);
         this.mainContainer.y = centerY - (this.camera.y * this.camera.zoom);
 
-        // Очищаем кэш чанков при перемещении камеры
-        this.clearChunkCache();
+        // Очищаем кэш чанков только при значительном перемещении
+        // Это предотвращает постоянное пересоздание спрайтов
+        const unloadThreshold = GAME_CONFIG.OPTIMIZATION.CHUNK_UNLOAD_THRESHOLD;
+        if (distance > unloadThreshold) {
+            this.clearChunkCache();
+        }
     }
 
     /**
@@ -1749,6 +1758,10 @@ class PIXIRenderer {
      * @param {number} smoothness - степень плавности (0-1, где 1 - мгновенное следование)
      */
     followCharacter(character, smoothness = 0.1) {
+        // Вычисляем расстояние перемещения для оптимизации очистки кэша
+        const oldX = this.camera.x;
+        const oldY = this.camera.y;
+        
         // Плавно перемещаем камеру к позиции персонажа
         this.camera.x += (character.x - this.camera.x) * smoothness;
         this.camera.y += (character.y - this.camera.y) * smoothness;
@@ -1757,8 +1770,15 @@ class PIXIRenderer {
         this.mainContainer.x = (this.app.screen.width / 2) - (this.camera.x * this.camera.zoom);
         this.mainContainer.y = (this.app.screen.height / 2) - (this.camera.y * this.camera.zoom);
 
-        // Очищаем кэш чанков при перемещении камеры
-        this.clearChunkCache();
+        // Очищаем кэш чанков только при значительном перемещении
+        const dx = this.camera.x - oldX;
+        const dy = this.camera.y - oldY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const unloadThreshold = GAME_CONFIG.OPTIMIZATION.CHUNK_UNLOAD_THRESHOLD;
+        
+        if (distance > unloadThreshold) {
+            this.clearChunkCache();
+        }
     }
 
     /**
@@ -2377,8 +2397,19 @@ class PIXIRenderer {
     /**
      * Рендеринг врага
      * @param {Object} enemy - объект врага
+     * @returns {boolean} - true если враг видим и отрендерен
      */
     renderEnemy(enemy) {
+        // Проверяем видимость врага (culling)
+        if (!this.isObjectVisible(enemy.x, enemy.y, 32, 32)) {
+            // Враг не видим - скрываем спрайт если он есть
+            const enemySprite = this.entitySprites.get(enemy);
+            if (enemySprite && enemySprite.parent) {
+                this.objectLayer.removeChild(enemySprite);
+            }
+            return false;
+        }
+
         // Создаем или обновляем спрайт врага
         let enemySprite = this.entitySprites.get(enemy);
         if (!enemySprite) {
@@ -2424,6 +2455,7 @@ class PIXIRenderer {
         // mainContainer уже перемещен и масштабирован на основе камеры, поэтому используем только мировые координаты
         enemySprite.x = enemy.x;
         enemySprite.y = enemy.y;
+        return true;
     }
 
 

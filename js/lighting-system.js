@@ -26,7 +26,10 @@ class LightingSystem {
         this.cacheDirty = true;
         
         // Максимальный размер кэша
-        this.maxCacheSize = (config.CACHE && config.CACHE.MAX_SIZE) || 5000;
+        this.maxCacheSize = (config.CACHE && config.CACHE.MAX_SIZE) || 10000;
+        
+        // Радиус обновления освещения (оптимизация - обновляем только близкие тайлы)
+        this.updateRadius = GAME_CONFIG.OPTIMIZATION.LIGHTING_UPDATE_RADIUS * GAME_CONFIG.TILE.BASE_SIZE;
         
         // Инициализация нормалей для типов тайлов
         this.initNormals();
@@ -148,9 +151,10 @@ class LightingSystem {
             
             this.playerLight.setPosition(x, y);
             
-            // Помечаем кэш как грязный при перемещении
+            // Очищаем кэш при перемещении для корректного обновления освещения
             if (distance > 1) {
-                this.cacheDirty = true;
+                this.lightingCache.clear();
+                this.tileColorCache.clear();
             }
         }
     }
@@ -436,6 +440,44 @@ class LightingSystem {
     }
     
     /**
+     * Получение ближайшего источника света и расстояния до него
+     * @param {number} worldX - X координата в мировых координатах
+     * @param {number} worldY - Y координата в мировых координатах
+     * @returns {Object} - объект {light, distance} или null
+     */
+    getNearestLight(worldX, worldY) {
+        let nearestLight = null;
+        let nearestDistance = Infinity;
+        
+        for (const light of this.lightSources.values()) {
+            if (!light.active) continue;
+            
+            const dx = worldX - light.x;
+            const dy = worldY - light.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+                nearestLight = light;
+            }
+        }
+        
+        return nearestLight ? { light: nearestLight, distance: nearestDistance } : null;
+    }
+    
+    /**
+     * Получение цвета ambient освещения (для далёких тайлов)
+     * @returns {number} - цвет в формате PIXI
+     */
+    getAmbientColor() {
+        const brightness = this.config.AMBIENT_LIGHT;
+        const r = Math.round(255 * brightness * this.config.LIGHT_COLOR.R);
+        const g = Math.round(255 * brightness * this.config.LIGHT_COLOR.G);
+        const b = Math.round(255 * brightness * this.config.LIGHT_COLOR.B);
+        return (r << 16) + (g << 8) + b;
+    }
+    
+    /**
      * Применение освещения к спрайту тайла
      * @param {PIXI.Sprite} sprite - спрайт тайла
      * @param {number} worldX - X координата в мировых координатах
@@ -443,8 +485,15 @@ class LightingSystem {
      * @param {number} tileType - тип тайла
      */
     applyLightingToSprite(sprite, worldX, worldY, tileType) {
+        // Вычисляем полный цвет освещения (кэширование внутри getLitColor)
         const litColor = this.getLitColor(worldX, worldY, tileType);
         sprite.tint = litColor;
+        
+        // Сбрасываем флаг грязного кэша после первого применения
+        // Это позволяет использовать кэш до следующего перемещения игрока
+        if (this.cacheDirty) {
+            this.cacheDirty = false;
+        }
     }
     
     /**
