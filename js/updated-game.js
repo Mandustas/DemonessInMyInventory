@@ -74,6 +74,9 @@ class Game {
         // Инициализируем систему освещения
         this.lightingSystem = new LightingSystem(GAME_CONFIG.LIGHTING);
         this.renderer.setLightingSystem(this.lightingSystem);
+        
+        // Инициализация системы пакетного рендеринга тайлов
+        this.renderer.initTileBatchRenderer();
 
         // Инициализируем менеджер факелов
         this.torchManager = new TorchManager(this.lightingSystem);

@@ -170,8 +170,11 @@ class PIXIRenderer {
         // Кэш для текстур вспышек
         this.flashTextureCache = null;
 
-        // Система освещения (инициализируется извне)
-        this.lightingSystem = null;
+    // Система освещения (инициализируется извне)
+    this.lightingSystem = null;
+
+    // Система пакетного рендеринга тайлов
+    this.tileBatchRenderer = null;
     }
 
     /**
@@ -1489,6 +1492,61 @@ class PIXIRenderer {
         
         // Очищаем кэш чанков, чтобы пересоздать их с освещением
         this.chunkCache.clear();
+    }
+
+    /**
+     * Инициализация системы пакетного рендеринга
+     */
+    initTileBatchRenderer() {
+        if (!this.tileBatchRenderer) {
+            this.tileBatchRenderer = new TileBatchRenderer(this);
+            console.log('[PIXIRenderer] TileBatchRenderer инициализирован');
+        }
+    }
+
+    /**
+     * Рендеринг тайлов с использованием batch rendering
+     * @param {ChunkSystem} chunkSystem - система чанков
+     * @returns {number} - количество отрендеренных батчей
+     */
+    renderTilesBatched(chunkSystem) {
+        if (!chunkSystem || !this.tileBatchRenderer) {
+            return 0;
+        }
+
+        // Получаем чанки для рендеринга
+        const chunksToRender = chunkSystem.getChunksToRender(
+            this.camera.x,
+            this.camera.y,
+            this.app.screen.width,
+            this.app.screen.height,
+            this.baseTileSize,
+            this.camera.zoom
+        );
+
+        // Рендерим чанки через batch renderer
+        const batchesRendered = this.tileBatchRenderer.renderChunks(chunksToRender, this.tileLayer);
+
+        // Обновляем освещение для каждого батча
+        if (this.lightingSystem) {
+            for (const child of this.tileLayer.children) {
+                if (child.chunkKey) {
+                    this.tileBatchRenderer.updateBatchLighting(
+                        child,
+                        this.lightingSystem,
+                        this.camera.x,
+                        this.camera.y
+                    );
+                }
+            }
+        }
+
+        // Очищаем далёкие батчи
+        const currentChunkX = Math.floor(this.camera.x / (this.baseTileSize * this.chunkSize));
+        const currentChunkY = Math.floor(this.camera.y / (this.baseTileSize * this.chunkSize));
+        this.tileBatchRenderer.cleanupDistantBatches(currentChunkX, currentChunkY, 15);
+
+        return batchesRendered;
     }
 
     /**
