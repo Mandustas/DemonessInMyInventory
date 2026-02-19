@@ -175,7 +175,7 @@ class EnemyHealthBarSystem {
             if (healthBar.health <= 0) {
                 this.remove(enemy);
                 continue;
-            }в
+            }
 
             // Проверяем, нужно ли скрыть полоску (прошло ли время после последнего урона)
             if (healthBar.visible && !healthBar.dying && !healthBar.fadeIn) {
