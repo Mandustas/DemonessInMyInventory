@@ -153,9 +153,10 @@ class LightingSystem {
             this.playerLight.setPosition(x, y);
 
             // ОПТИМИЗАЦИЯ: Очищаем кэш только при значительном перемещении
-            // (на размер тайла или больше) ИЛИ при принудительном запросе
+            // (на четверть тайла = 16 пикселей для плавного обновления) ИЛИ при принудительном запросе
             // при загрузке новых чанков
-            if (forceCacheClear || distance > GAME_CONFIG.TILE.BASE_SIZE) {
+            const cacheClearThreshold = GAME_CONFIG.TILE.BASE_SIZE / 4; // 16 пикселей вместо 64
+            if (forceCacheClear || distance > cacheClearThreshold) {
                 this.lightingCache.clear();
                 this.tileColorCache.clear();
                 this.cacheDirty = true;
