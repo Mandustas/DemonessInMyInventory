@@ -335,9 +335,10 @@ class Enemy {
      * Получение урона
      * @param {number} damage - количество урона
      * @param {boolean} isCritical - является ли урон критическим
+     * @param {Object} attacker - атакующий (для определения направления откидывания)
      * @returns {number} - фактический полученный урон
      */
-    takeDamage(damage, isCritical = false) {
+    takeDamage(damage, isCritical = false, attacker = null) {
         // Учитываем броню врага при получении урона
         const totalArmor = this.getTotalStat('armor');
         const actualDamage = Math.max(1, damage - totalArmor); // Минимум 1 урон
@@ -355,12 +356,81 @@ class Enemy {
             game.renderer.updateEnemyHealthBar(this, true); // true = только что получил урон
         }
 
+        // Откидывание при критическом ударе
+        if (isCritical && attacker) {
+            this.knockback(attacker.x, attacker.y, 50); // Откидываем на 50 пикселей
+        }
+
         if (this.health <= 0) {
             this.health = 0;
             return actualDamage;
         }
 
         return actualDamage;
+    }
+    
+    /**
+     * Откидывание врага от источника
+     * @param {number} sourceX - X координата источника откидывания
+     * @param {number} sourceY - Y координата источника откидывания
+     * @param {number} force - сила откидывания (расстояние)
+     */
+    knockback(sourceX, sourceY, force = 50) {
+        // Вычисляем направление откидывания (от источника)
+        const dx = this.x - sourceX;
+        const dy = this.y - sourceY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance === 0) return; // Не откидываем, если расстояние 0
+        
+        // Нормализуем вектор направления
+        const nx = dx / distance;
+        const ny = dy / distance;
+        
+        // Вычисляем новую позицию
+        const newX = this.x + nx * force;
+        const newY = this.y + ny * force;
+        
+        // Проверяем проходимость новой позиции
+        if (this.canMoveTo(newX, newY)) {
+            this.x = newX;
+            this.y = newY;
+        } else {
+            // Пробуем откинуть на меньшее расстояние
+            for (let reducedForce = force * 0.75; reducedForce > 5; reducedForce *= 0.75) {
+                const reducedX = this.x + nx * reducedForce;
+                const reducedY = this.y + ny * reducedForce;
+                if (this.canMoveTo(reducedX, reducedY)) {
+                    this.x = reducedX;
+                    this.y = reducedY;
+                    break;
+                }
+            }
+        }
+    }
+    
+    /**
+     * Проверка возможности перемещения в указанную позицию
+     * @param {number} x - X координата
+     * @param {number} y - Y координата
+     * @returns {boolean} - можно ли переместиться
+     */
+    canMoveTo(x, y) {
+        // Преобразуем координаты в координаты тайлов
+        let tilePos;
+        if (typeof getTileIndex !== 'undefined') {
+            tilePos = getTileIndex(x, y);
+        } else {
+            tilePos = { tileX: Math.floor(x / 64), tileY: Math.floor(y / 32) };
+        }
+        
+        // Проверяем через chunkSystem если доступна
+        if (typeof game !== 'undefined' && game.chunkSystem) {
+            return game.chunkSystem.isPassable(tilePos.tileX, tilePos.tileY);
+        }
+        
+        // Резервный вариант - считаем все тайлы проходимыми
+        return true;
     }
     
     /**

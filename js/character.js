@@ -163,7 +163,8 @@ class Character {
                 isCritical = true;
             }
 
-            return target.takeDamage(damage, isCritical);
+            // Передаём себя как атакующего для откидывания врага при критическом ударе
+            return target.takeDamage(damage, isCritical, this);
         } else {
             // Промах - вызываем эффект уворота для цели
             if (typeof game !== 'undefined' && game.combatEffects) {

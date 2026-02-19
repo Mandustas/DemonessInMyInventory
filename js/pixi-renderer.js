@@ -668,7 +668,7 @@ class PIXIRenderer {
     }
 
     /**
-     * Создание текстуры пола (оптимизированная версия)
+     * Создание текстуры пола (плоская версия без рельефа)
      * @param {number} tileSize - размер тайла
      * @returns {PIXI.Texture} - текстура пола
      */
@@ -677,18 +677,13 @@ class PIXIRenderer {
             const graphics = new PIXI.Graphics();
             const ts = tileSize;
 
-            // Основной пол - тёмный камень (упрощённая версия)
+            // Плоский пол - простой изометрический ромб без рельефа
             graphics.beginFill(this.hexToDecimal(this.colors.floor));
             this.drawIsometricTile(graphics, 0, 0, ts, ts / 2);
             graphics.endFill();
 
-            // Простое затемнение к центру
-            graphics.beginFill(0x0a0806, 0.3);
-            this.drawIsometricTile(graphics, 0, 0, ts * 0.7, ts / 2 * 0.7);
-            graphics.endFill();
-
-            // Минимальный контур
-            graphics.lineStyle(1, this.hexToDecimal(this.colors.grid), 0.4);
+            // Тонкий контур для визуального разделения тайлов
+            graphics.lineStyle(1, this.hexToDecimal(this.colors.grid), 0.2);
             graphics.moveTo(0, 0);
             graphics.lineTo(ts / 2, ts / 4);
             graphics.lineTo(0, ts / 2);

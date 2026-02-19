@@ -646,6 +646,10 @@ class Game {
 
     /**
      * Создание врага
+     * @param {number} x - координата X
+     * @param {number} y - координата Y
+     * @param {string} type - тип врага
+     * @returns {Enemy|null} - созданный враг или null, если позиция непроходима
      */
     createEnemy(x, y, type = 'basic') {
         // Проверяем, являются ли x и y массивом (когда передаются через spread оператор)
@@ -653,8 +657,23 @@ class Game {
             [x, y] = x;
         }
 
+        // Проверяем проходимость позиции перед созданием врага
+        let tilePos;
+        if (typeof getTileIndex !== 'undefined') {
+            tilePos = getTileIndex(x, y);
+        } else {
+            tilePos = { tileX: Math.floor(x / 64), tileY: Math.floor(y / 32) };
+        }
+
+        // Проверяем, что позиция проходима
+        if (!this.isPassable(tilePos.tileX, tilePos.tileY)) {
+            console.warn(`Попытка создать врага на непроходимом тайле (${tilePos.tileX}, ${tilePos.tileY})`);
+            return null;
+        }
+
         const enemy = new Enemy(x, y, type);
         this.enemies.push(enemy);
+        return enemy;
     }
 
     /**
@@ -1109,9 +1128,14 @@ class Game {
                 // Вычисляем, насколько нужно отодвинуть
                 const overlap = (enemy.hitboxRadius + this.character.hitboxRadius) - distance;
 
-                // Сдвигаем врага
-                enemy.x += nx * overlap / 2;
-                enemy.y += ny * overlap / 2;
+                // Проверяем проходимость новой позиции перед сдвигом
+                const newX = enemy.x + nx * overlap / 2;
+                const newY = enemy.y + ny * overlap / 2;
+                
+                if (enemy.canMoveTo(newX, newY)) {
+                    enemy.x = newX;
+                    enemy.y = newY;
+                }
             }
         }
 
@@ -1131,12 +1155,25 @@ class Game {
                     // Вычисляем, насколько нужно отодвинуть
                     const overlap = (enemy.hitboxRadius + otherEnemy.hitboxRadius) - distance;
 
-                    // Сдвигаем врагов в противоположные стороны
+                    // Сдвигаем врагов в противоположные стороны с проверкой проходимости
                     const moveAmount = overlap / 2;
-                    enemy.x += nx * moveAmount;
-                    enemy.y += ny * moveAmount;
-                    otherEnemy.x -= nx * moveAmount;
-                    otherEnemy.y -= ny * moveAmount;
+                    
+                    const newEnemyX = enemy.x + nx * moveAmount;
+                    const newEnemyY = enemy.y + ny * moveAmount;
+                    const newOtherX = otherEnemy.x - nx * moveAmount;
+                    const newOtherY = otherEnemy.y - ny * moveAmount;
+                    
+                    // Проверяем проходимость для первого врага
+                    if (enemy.canMoveTo(newEnemyX, newEnemyY)) {
+                        enemy.x = newEnemyX;
+                        enemy.y = newEnemyY;
+                    }
+                    
+                    // Проверяем проходимость для второго врага
+                    if (otherEnemy.canMoveTo(newOtherX, newOtherY)) {
+                        otherEnemy.x = newOtherX;
+                        otherEnemy.y = newOtherY;
+                    }
                 }
             }
         }

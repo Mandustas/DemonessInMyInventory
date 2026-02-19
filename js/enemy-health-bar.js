@@ -22,7 +22,6 @@ class EnemyHealthBarSystem {
 
         if (!healthBar) {
             // Создаём новую полоску
-            console.log(`[HealthBar] Появилась полоска здоровья над врагом: ${enemy.name || enemy.type || 'Unknown'} (x: ${enemy.x.toFixed(1)}, y: ${enemy.y.toFixed(1)})`);
             healthBar = this.createHealthBar(enemy);
             this.healthBars.set(enemy, healthBar);
         }
@@ -48,7 +47,6 @@ class EnemyHealthBarSystem {
         const fillPercent = healthBar.health / healthBar.maxHealth;
         this.updateHealthGraphics(healthBar, fillPercent);
         
-        console.log(`[HealthBar] Полоска обновлена: health=${healthBar.health}/${maxHealth}, fillPercent=${fillPercent.toFixed(2)}`);
     }
 
     /**
@@ -169,22 +167,15 @@ class EnemyHealthBarSystem {
         for (const [enemy, healthBar] of this.healthBars.entries()) {
             // Если враг мёртв - удаляем полоску
             if (!enemy.isAlive()) {
-                console.log(`[HealthBar] Удаление полоски - враг мёртв: ${enemy.name || enemy.type}`);
                 this.remove(enemy);
                 continue;
             }
             
             // Также проверяем если здоровье <= 0
             if (healthBar.health <= 0) {
-                console.log(`[HealthBar] Удаление полоски - здоровье = 0`);
                 this.remove(enemy);
                 continue;
-            }
-
-            // Отладочный лог для проверки обновления
-            if (healthBar.fadeIn || healthBar.fadeOut) {
-                console.log(`[HealthBar] update: enemy=${enemy.name || enemy.type}, alpha=${healthBar.alpha.toFixed(3)}, fadeIn=${healthBar.fadeIn}, fadeOut=${healthBar.fadeOut}, visible=${healthBar.container.visible}`);
-            }
+            }в
 
             // Проверяем, нужно ли скрыть полоску (прошло ли время после последнего урона)
             if (healthBar.visible && !healthBar.dying && !healthBar.fadeIn) {
