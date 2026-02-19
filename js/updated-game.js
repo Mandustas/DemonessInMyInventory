@@ -111,6 +111,9 @@ class Game {
         // Загружаем чанки вокруг персонажа
         const spawnTilePos = getTileIndex(this.character.x, this.character.y);
         this.chunkSystem.loadChunksAround(spawnTilePos.tileX, spawnTilePos.tileY);
+        
+        // Отмечаем начальные чанки (для отладочной визуализации)
+        this.chunkSystem.markInitialChunks(spawnTilePos.tileX, spawnTilePos.tileY);
 
         // Создаем врагов в стартовой области
         this.spawnEnemies();

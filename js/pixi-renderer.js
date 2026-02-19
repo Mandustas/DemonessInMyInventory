@@ -1594,8 +1594,12 @@ class PIXIRenderer {
         const visibleRadius = Math.ceil(screenDiagonal / tileSize) + 2;
         const visibleChunkRadius = Math.ceil(visibleRadius / chunkSize);
         
-        const currentChunkX = Math.floor(this.camera.x / (tileSize * chunkSize));
-        const currentChunkY = Math.floor(this.camera.y / (tileSize * chunkSize));
+        // ИСПРАВЛЕНИЕ: Преобразуем 2D координаты камеры в тайловые координаты
+        // this.camera.x и this.camera.y - это 2D экранные координаты (результат isoTo2D)
+        // Нужно преобразовать их обратно в тайловые координаты для корректного расчёта чанков
+        const isoCoords = coordToIso(this.camera.x, this.camera.y);
+        const currentChunkX = Math.floor(isoCoords.isoX / chunkSize);
+        const currentChunkY = Math.floor(isoCoords.isoY / chunkSize);
 
         // Проходим только по видимым чанкам
         for (const [chunkKey, chunkContainer] of this.chunkCache.entries()) {
@@ -3711,9 +3715,74 @@ class PIXIRenderer {
         // Это гарантирует, что новые чанки получат правильное освещение
         this.updateDynamicLighting();
         
+        // Отладочная отрисовка границ чанков
+        if (GAME_CONFIG.DEBUG.SHOW_CHUNK_BORDERS && chunkSystem) {
+            this.renderChunkBorders(chunkSystem);
+        }
+        
         // Отладочная информация (можно удалить в продакшене)
         if (GAME_CONFIG.DEBUG.SHOW_CHUNK_INFO) {
             console.log(`[Viewport Culling] Чанков рендерится: ${chunksRendered}, Всего в кэше: ${this.chunkCache.size}`);
+        }
+    }
+    
+    /**
+     * Отрисовка границ чанков для отладки
+     * Начальные чанки отмечаются синей рамкой, остальные - красной
+     * @param {ConnectedChunkSystem} chunkSystem - система чанков
+     */
+    renderChunkBorders(chunkSystem) {
+        // Удаляем старую отладочную графику
+        const oldGraphics = this.entitySprites.get('chunkBorders');
+        if (oldGraphics) {
+            oldGraphics.destroy();
+        }
+        
+        const graphics = new PIXI.Graphics();
+        this.entitySprites.set('chunkBorders', graphics);
+        this.tileLayer.addChild(graphics);
+        
+        const tileSize = this.baseTileSize;
+        const chunkSize = chunkSystem.chunkSize;
+        
+        // Проходим по всем активным чанкам
+        for (const chunkKey of chunkSystem.activeChunks) {
+            const [chunkX, chunkY] = chunkKey.split(',').map(Number);
+            
+            // Проверяем, является ли чанк начальным
+            const isInitial = chunkSystem.isInitialChunk(chunkX, chunkY);
+            
+            // Вычисляем углы чанка в изометрических координатах
+            const startX = chunkX * chunkSize;
+            const startY = chunkY * chunkSize;
+            const endX = startX + chunkSize;
+            const endY = startY + chunkSize;
+            
+            // Преобразуем углы в экранные координаты
+            const corners = [
+                isoTo2D(startX, startY),
+                isoTo2D(endX, startY),
+                isoTo2D(endX, endY),
+                isoTo2D(startX, endY)
+            ];
+            
+            // Рисуем рамку
+            graphics.lineStyle(2, isInitial ? 0x0066FF : 0xFF0000, 0.5);
+            graphics.moveTo(corners[0].x, corners[0].y);
+            for (let i = 1; i < corners.length; i++) {
+                graphics.lineTo(corners[i].x, corners[i].y);
+            }
+            graphics.closePath();
+            
+            // Добавляем текст с координатами чанка в центре
+            const centerIsoX = startX + chunkSize / 2;
+            const centerIsoY = startY + chunkSize / 2;
+            const centerScreen = isoTo2D(centerIsoX, centerIsoY);
+            
+            // Рисуем точку в центре чанка
+            graphics.beginFill(isInitial ? 0x0066FF : 0xFF0000, 0.8);
+            graphics.drawCircle(centerScreen.x, centerScreen.y, 3);
+            graphics.endFill();
         }
     }
 

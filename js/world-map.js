@@ -361,6 +361,10 @@ class ConnectedChunkSystem {
         // Текущая область генерации
         this.currentCenterX = 0;
         this.currentCenterY = 0;
+        
+        // Начальные чанки (для отладочной визуализации)
+        this.initialChunks = new Set();
+        this._initialChunksSet = false;
     }
 
     getChunkKey(chunkX, chunkY) {
@@ -507,6 +511,40 @@ class ConnectedChunkSystem {
         for (const chunkKey of chunksToDelete) {
             this.activeChunks.delete(chunkKey);
         }
+    }
+    
+    /**
+     * Отметить начальные чанки (вызывается один раз при старте игры)
+     * @param {number} playerX - позиция игрока X в тайлах
+     * @param {number} playerY - позиция игрока Y в тайлах
+     */
+    markInitialChunks(playerX, playerY) {
+        if (this._initialChunksSet) return;
+        
+        const centerChunkX = Math.floor(playerX / this.chunkSize);
+        const centerChunkY = Math.floor(playerY / this.chunkSize);
+        
+        // Отмечаем чанки в радиусе загрузки как начальные
+        for (let dy = -this.loadRadius; dy <= this.loadRadius; dy++) {
+            for (let dx = -this.loadRadius; dx <= this.loadRadius; dx++) {
+                const chunkX = centerChunkX + dx;
+                const chunkY = centerChunkY + dy;
+                this.initialChunks.add(this.getChunkKey(chunkX, chunkY));
+            }
+        }
+        
+        this._initialChunksSet = true;
+        console.log(`[ConnectedChunkSystem] Отмечено начальных чанков: ${this.initialChunks.size}`);
+    }
+    
+    /**
+     * Проверка, является ли чанк начальным
+     * @param {number} chunkX - координата чанка X
+     * @param {number} chunkY - координата чанка Y
+     * @returns {boolean}
+     */
+    isInitialChunk(chunkX, chunkY) {
+        return this.initialChunks.has(this.getChunkKey(chunkX, chunkY));
     }
 
     /**
