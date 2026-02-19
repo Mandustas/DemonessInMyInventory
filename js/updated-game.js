@@ -919,11 +919,6 @@ class Game {
         // Центрируем камеру на персонаже
         this.renderer.centerCameraOnCharacter(this.character);
 
-        // Обновляем позицию источника света (следует за персонажем)
-        if (this.lightingSystem) {
-            this.lightingSystem.setLightSource(this.character.x, this.character.y);
-        }
-
         // Загружаем новые чанки только при переходе в новый чанк
         const currentTilePos = getTileIndex(this.character.x, this.character.y);
         const currentChunkX = Math.floor(currentTilePos.tileX / this.chunkSystem.chunkSize);
@@ -933,10 +928,20 @@ class Game {
             this.lastChunkX = currentChunkX;
             this.lastChunkY = currentChunkY;
             this.chunkSystem.loadChunksAround(currentTilePos.tileX, currentTilePos.tileY);
-            
+
             // Генерируем факелы в новых чанках
             if (this.torchManager) {
                 this.torchManager.generateTorches(this.chunkSystem.chunks, GAME_CONFIG.TILE.BASE_SIZE);
+            }
+
+            // ОБНОВЛЯЕМ освещение с принудительной очисткой кэша для новых чанков
+            if (this.lightingSystem) {
+                this.lightingSystem.setLightSource(this.character.x, this.character.y, true);
+            }
+        } else {
+            // Обновляем позицию источника света (следует за персонажем)
+            if (this.lightingSystem) {
+                this.lightingSystem.setLightSource(this.character.x, this.character.y, false);
             }
         }
 

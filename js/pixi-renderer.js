@@ -665,7 +665,7 @@ class PIXIRenderer {
     }
 
     /**
-     * Создание текстуры пола
+     * Создание текстуры пола (оптимизированная версия)
      * @param {number} tileSize - размер тайла
      * @returns {PIXI.Texture} - текстура пола
      */
@@ -674,64 +674,23 @@ class PIXIRenderer {
             const graphics = new PIXI.Graphics();
             const ts = tileSize;
 
-            // Основной пол - тёмный камень
+            // Основной пол - тёмный камень (упрощённая версия)
             graphics.beginFill(this.hexToDecimal(this.colors.floor));
             this.drawIsometricTile(graphics, 0, 0, ts, ts / 2);
             graphics.endFill();
 
-            // Добавляем градиент затемнения к краям
-            graphics.beginFill(0x0a0806, 0.4);
-            this.drawIsometricTile(graphics, 0, 0, ts * 0.9, ts / 2 * 0.9);
+            // Простое затемнение к центру
+            graphics.beginFill(0x0a0806, 0.3);
+            this.drawIsometricTile(graphics, 0, 0, ts * 0.7, ts / 2 * 0.7);
             graphics.endFill();
 
-            // Текстура каменных плит с трещинами
-            const stoneColors = [0x2a2218, 0x3d2f22, 0x1a1512, 0x4a3a2a];
-            for (let i = 0; i < 8; i++) {
-                const angle = (i / 8) * Math.PI;
-                const dist = ts * 0.15 * Math.random();
-                const px = Math.cos(angle) * dist;
-                const py = Math.sin(angle) * dist * 0.5;
-                const color = stoneColors[Math.floor(Math.random() * stoneColors.length)];
-                graphics.beginFill(color, 0.3 + Math.random() * 0.3);
-                graphics.drawCircle(px, py + ts * 0.1, ts * 0.03 + Math.random() * ts * 0.02);
-                graphics.endFill();
-            }
-
-            // Трещины на камне
-            graphics.lineStyle(1 + Math.random(), this.hexToDecimal(this.colors.grid), 0.4);
-            for (let c = 0; c < 3; c++) {
-                const startX = (Math.random() - 0.5) * ts * 0.4;
-                const startY = (Math.random() - 0.5) * ts * 0.2 + ts * 0.1;
-                graphics.moveTo(startX, startY);
-                let cx = startX;
-                let cy = startY;
-                for (let seg = 0; seg < 4; seg++) {
-                    cx += (Math.random() - 0.5) * ts * 0.15;
-                    cy += ts * 0.05 + Math.random() * ts * 0.05;
-                    if (cy < ts * 0.35) {
-                        graphics.lineTo(cx, cy);
-                    }
-                }
-            }
-
-            // Контур плит по краям
-            graphics.lineStyle(2, this.hexToDecimal(this.colors.grid), 0.6);
+            // Минимальный контур
+            graphics.lineStyle(1, this.hexToDecimal(this.colors.grid), 0.4);
             graphics.moveTo(0, 0);
             graphics.lineTo(ts / 2, ts / 4);
             graphics.lineTo(0, ts / 2);
             graphics.lineTo(-ts / 2, ts / 4);
             graphics.closePath();
-
-            // Добавляем неровности по краям
-            graphics.lineStyle(1, 0x1a1512, 0.3);
-            for (let e = 0; e < 12; e++) {
-                const edgeAngle = (e / 12) * Math.PI * 2;
-                const edgeX = Math.cos(edgeAngle) * ts * 0.35;
-                const edgeY = Math.sin(edgeAngle) * ts * 0.175;
-                graphics.beginFill(0x0a0806, 0.2);
-                graphics.drawCircle(edgeX, edgeY, ts * 0.02);
-                graphics.endFill();
-            }
 
             const texture = this.app.renderer.generateTexture(graphics);
             graphics.destroy();
@@ -1543,29 +1502,68 @@ class PIXIRenderer {
         this.chunkCache.clear();
     }
     
+    // Счётчик кадров для периодического обновления освещения
+    _lightingUpdateCounter = 0;
+    _lightingUpdateInterval = 3; // Обновлять освещение каждые N кадров
+
     /**
      * Обновление освещения для видимых чанков в реальном времени
      * Вызывается каждый кадр для динамического освещения
+     * ОПТИМИЗАЦИЯ: обновляем только при перемещении игрока или периодически
      */
     updateDynamicLighting() {
         if (!this.lightingSystem) return;
 
-        // Проходим по всем видимым чанкам и обновляем tint спрайтов
+        // Оптимизация: обновляем освещение только если кэш грязный или периодически
+        this._lightingUpdateCounter++;
+        const shouldUpdate = this.lightingSystem.cacheDirty ||
+                           (this._lightingUpdateCounter >= this._lightingUpdateInterval);
+
+        if (!shouldUpdate) return;
+
+        this._lightingUpdateCounter = 0;
+
+        // ОПТИМИЗАЦИЯ: Вычисляем видимые чанки на основе позиции камеры
+        const tileSize = this.baseTileSize;
+        const chunkSize = 16; // Размер чанка по умолчанию
+        const screenDiagonal = Math.sqrt(
+            Math.pow(this.app.screen.width, 2) + 
+            Math.pow(this.app.screen.height, 2)
+        ) / this.camera.zoom;
+        
+        // Добавляем запас для плавного появления
+        const visibleRadius = Math.ceil(screenDiagonal / tileSize) + 2;
+        const visibleChunkRadius = Math.ceil(visibleRadius / chunkSize);
+        
+        const currentChunkX = Math.floor(this.camera.x / (tileSize * chunkSize));
+        const currentChunkY = Math.floor(this.camera.y / (tileSize * chunkSize));
+
+        // Проходим только по видимым чанкам
         for (const [chunkKey, chunkContainer] of this.chunkCache.entries()) {
             if (!chunkContainer || !chunkContainer.children) continue;
+
+            // Проверяем, находится ли чанк в пределах видимости
+            const [chunkX, chunkY] = chunkKey.split(',').map(Number);
+            const chunkDistX = Math.abs(chunkX - currentChunkX);
+            const chunkDistY = Math.abs(chunkY - currentChunkY);
             
+            // Пропускаем чанки за пределами видимости
+            if (chunkDistX > visibleChunkRadius || chunkDistY > visibleChunkRadius) {
+                continue;
+            }
+
             // Обновляем tint для каждого спрайта в чанке
             for (const sprite of chunkContainer.children) {
                 if (!sprite || sprite.destroyed) continue;
-                
+
                 // Используем сохранённые мировые координаты
                 const worldX = sprite.worldX;
                 const worldY = sprite.worldY;
                 const tileType = sprite.tileType;
-                
+
                 // Если координаты не сохранены, пропускаем
                 if (worldX === undefined || worldY === undefined) continue;
-                
+
                 // Применяем освещение с мировыми координатами
                 this.lightingSystem.applyLightingToSprite(sprite, worldX, worldY, tileType);
             }
@@ -1850,10 +1848,13 @@ class PIXIRenderer {
      * Рендеринг тайлов (пол, стены, декорации, препятствия)
      * @param {Array<Array<number>>} map - карта тайлов (0 - пол, 1 - стена, 2 - колонна, 3 - дерево, 4 - скала, 5 - вода, 6 - лед, 7 - декорация)
      * @param {ChunkSystem} chunkSystem - система чанков (опционально)
+     * @returns {number} - количество отрендеренных чанков
      */
     renderTiles(map, chunkSystem = null) {
         // Очищаем предыдущие тайлы - removeChildren удаляет детей из контейнера, но не уничтожает их
         this.tileLayer.removeChildren();
+        
+        let chunksRenderedCount = 0;
 
         if (chunkSystem) {
             // Предварительно загружаем текстуры для всех типов тайлов
@@ -1868,13 +1869,15 @@ class PIXIRenderer {
                 this.camera.y,
                 this.app.screen.width,
                 this.app.screen.height,
-                this.baseTileSize
+                this.baseTileSize,
+                this.camera.zoom
             );
 
             for (const chunk of chunksToRender) {
                 if (chunk && chunk.tiles) {
                     // Получаем закэшированный чанк или создаем новый
                     const chunkContainer = this.getCachedChunk(chunk);
+                    chunksRenderedCount++;
 
                     // Проверяем, что чанк имеет детей (тайлы)
                     if (chunkContainer.children.length === 0) {
@@ -1952,6 +1955,8 @@ class PIXIRenderer {
                 }
             }
         }
+        
+        return chunksRenderedCount;
     }
 
     /**
@@ -3640,11 +3645,17 @@ class PIXIRenderer {
      * @param {ChunkSystem} chunkSystem - система чанков
      */
     renderBackgroundTiles(map, chunkSystem) {
-        // Обновляем динамическое освещение каждый кадр
+        // Сначала рендерим тайлы (добавляем новые чанки в кэш)
+        const chunksRendered = this.renderTiles(map, chunkSystem);
+
+        // ОБНОВЛЯЕМ динамическое освещение ПОСЛЕ добавления новых чанков
+        // Это гарантирует, что новые чанки получат правильное освещение
         this.updateDynamicLighting();
         
-        // Рендерим фоновые тайлы (пол, вода, лед и т.д.) без участия в глубинной сортировке
-        this.renderTiles(map, chunkSystem);
+        // Отладочная информация (можно удалить в продакшене)
+        if (GAME_CONFIG.DEBUG.SHOW_CHUNK_INFO) {
+            console.log(`[Viewport Culling] Чанков рендерится: ${chunksRendered}, Всего в кэше: ${this.chunkCache.size}`);
+        }
     }
 
     /**
@@ -3671,7 +3682,8 @@ class PIXIRenderer {
                 this.camera.y,
                 this.app.screen.width,
                 this.app.screen.height,
-                this.baseTileSize
+                this.baseTileSize,
+                this.camera.zoom
             );
 
             for (const chunk of chunksToRender) {
@@ -3763,20 +3775,25 @@ class PIXIRenderer {
             }
         }
 
-        // Добавляем врагов
+        // Добавляем врагов с проверкой видимости
+        const viewportMargin = this.baseTileSize * 3; // Запас за пределами экрана
+        
         for (const enemy of enemies) {
-            allRenderables.push({
-                x: enemy.x,
-                y: enemy.y,
-                height: enemy.height || 0,
-                render: () => {
-                    // Рендерим врага
-                    this.renderEnemy(enemy);
-                }
-            });
+            // Проверяем, находится ли враг в пределах видимости
+            if (this.isWorldPositionVisible(enemy.x, enemy.y, viewportMargin)) {
+                allRenderables.push({
+                    x: enemy.x,
+                    y: enemy.y,
+                    height: enemy.height || 0,
+                    render: () => {
+                        // Рендерим врага
+                        this.renderEnemy(enemy);
+                    }
+                });
+            }
         }
 
-        // Добавляем персонажа
+        // Добавляем персонажа (всегда рендерим, так как камера следует за ним)
         allRenderables.push({
             x: character.x,
             y: character.y,
@@ -3788,6 +3805,27 @@ class PIXIRenderer {
         });
 
         return allRenderables;
+    }
+
+    /**
+     * Проверка видимости мировой позиции на экране
+     * @param {number} worldX - X координата в мире
+     * @param {number} worldY - Y координата в мире
+     * @param {number} margin - запас за пределами экрана
+     * @returns {boolean} - видна ли позиция
+     */
+    isWorldPositionVisible(worldX, worldY, margin = 0) {
+        const centerX = this.app.screen.width / 2;
+        const centerY = this.app.screen.height / 2;
+        
+        // Преобразуем мировые координаты в экранные
+        const screenX = centerX + (worldX - this.camera.x) * this.camera.zoom;
+        const screenY = centerY + (worldY - this.camera.y) * this.camera.zoom;
+        
+        return screenX > -margin && 
+               screenX < this.app.screen.width + margin &&
+               screenY > -margin / 2 && 
+               screenY < this.app.screen.height + margin / 2;
     }
 
     /**

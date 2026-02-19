@@ -142,19 +142,23 @@ class LightingSystem {
      * Установка позиции источника света игрока
      * @param {number} x - X координата в мировых координатах
      * @param {number} y - Y координата в мировых координатах
+     * @param {boolean} forceCacheClear - принудительно очистить кэш (при загрузке новых чанков)
      */
-    setLightSource(x, y) {
+    setLightSource(x, y, forceCacheClear = false) {
         if (this.playerLight) {
             const dx = x - this.playerLight.x;
             const dy = y - this.playerLight.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            
+
             this.playerLight.setPosition(x, y);
-            
-            // Очищаем кэш при перемещении для корректного обновления освещения
-            if (distance > 1) {
+
+            // ОПТИМИЗАЦИЯ: Очищаем кэш только при значительном перемещении
+            // (на размер тайла или больше) ИЛИ при принудительном запросе
+            // при загрузке новых чанков
+            if (forceCacheClear || distance > GAME_CONFIG.TILE.BASE_SIZE) {
                 this.lightingCache.clear();
                 this.tileColorCache.clear();
+                this.cacheDirty = true;
             }
         }
     }

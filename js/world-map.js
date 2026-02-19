@@ -511,32 +511,121 @@ class ConnectedChunkSystem {
 
     /**
      * Получение чанков для рендеринга
+     * ОПТИМИЗАЦИЯ: точный расчет видимых чанков с учётом изометрии и зума
      */
-    getChunksToRender(cameraX, cameraY, screenWidth, screenHeight, tileSize = GAME_CONFIG.TILE.BASE_SIZE) {
-        const centerWorldX = cameraX + screenWidth / 2;
-        const centerWorldY = cameraY + screenHeight / 2;
-
-        const isoCoords = coordToIso(centerWorldX, centerWorldY);
+    getChunksToRender(cameraX, cameraY, screenWidth, screenHeight, tileSize = GAME_CONFIG.TILE.BASE_SIZE, zoom = 1) {
+        // cameraX, cameraY - это мировые координаты (результат isoTo2D)
+        // Нам нужно определить, какие чанки видны на экране
+        
+        // Размеры экрана с учётом зума (реальная видимая область в мировых координатах)
+        const visibleWidth = screenWidth / zoom;
+        const visibleHeight = screenHeight / zoom;
+        
+        // Вычисляем диагональ видимой области
+        const screenDiagonal = Math.sqrt(
+            Math.pow(visibleWidth, 2) + Math.pow(visibleHeight, 2)
+        );
+        
+        // Преобразуем мировые координаты камеры в изометрические
+        // cameraX, cameraY - это экранные координаты центра (результат isoTo2D)
+        const isoCoords = coordToIso(cameraX, cameraY);
         const centerChunkX = Math.floor(isoCoords.isoX / this.chunkSize);
         const centerChunkY = Math.floor(isoCoords.isoY / this.chunkSize);
 
-        const tilesOnScreenX = Math.ceil(screenWidth / (tileSize / 2));
-        const tilesOnScreenY = Math.ceil(screenHeight / (tileSize / 4));
-        const renderRadius = Math.max(GAME_CONFIG.WORLD_MAP.MIN_RENDER_RADIUS, Math.ceil(Math.max(tilesOnScreenX, tilesOnScreenY) / this.chunkSize)) + GAME_CONFIG.WORLD_MAP.RENDER_RADIUS_EXTRA;
+        // В изометрической проекции тайл имеет соотношение 2:1 (ширина:высота)
+        const isoTileWidth = tileSize;
+        const isoTileHeight = tileSize / 2;
         
+        // Количество тайлов, видимых на экране по диагонали
+        const tilesOnScreenDiagonal = Math.ceil(screenDiagonal / Math.min(isoTileWidth, isoTileHeight));
+        
+        // Радиус в тайлах с запасом для плавного появления и учётом изометрии
+        // Изометрический ромб шире по X, поэтому добавляем больший запас
+        const tileRadius = Math.ceil(tilesOnScreenDiagonal / 2) + 8;
+        
+        // Радиус в чанках (добавляем запас для изометрии)
+        const chunkRadius = Math.ceil(tileRadius / this.chunkSize) + 2;
+
         const chunksToRender = [];
-        
-        for (let chunkX = centerChunkX - renderRadius; chunkX <= centerChunkX + renderRadius; chunkX++) {
-            for (let chunkY = centerChunkY - renderRadius; chunkY <= centerChunkY + renderRadius; chunkY++) {
+
+        for (let chunkX = centerChunkX - chunkRadius; chunkX <= centerChunkX + chunkRadius; chunkX++) {
+            for (let chunkY = centerChunkY - chunkRadius; chunkY <= centerChunkY + chunkRadius; chunkY++) {
                 const chunkKey = this.getChunkKey(chunkX, chunkY);
-                
+
                 if (this.activeChunks.has(chunkKey)) {
-                    chunksToRender.push(this.chunks.get(chunkKey));
+                    const chunk = this.chunks.get(chunkKey);
+                    
+                    // ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: проверяем, находится ли чанк хотя бы частично в пределах экрана
+                    if (chunk && this.isChunkVisible(chunk, cameraX, cameraY, screenWidth, screenHeight, tileSize, zoom)) {
+                        chunksToRender.push(chunk);
+                    }
                 }
             }
         }
-        
+
         return chunksToRender;
+    }
+
+    /**
+     * Проверка видимости чанка на экране
+     * @param {ConnectedChunk} chunk - чанк для проверки
+     * @param {number} cameraX - X позиция камеры (мировые координаты - результат isoTo2D)
+     * @param {number} cameraY - Y позиция камеры (мировые координаты - результат isoTo2D)
+     * @param {number} screenWidth - ширина экрана
+     * @param {number} screenHeight - высота экрана
+     * @param {number} tileSize - размер тайла
+     * @param {number} zoom - уровень зума камеры
+     * @returns {boolean} - виден ли чанк
+     */
+    isChunkVisible(chunk, cameraX, cameraY, screenWidth, screenHeight, tileSize, zoom = 1) {
+        // Буфер с учётом зума (в экранных координатах)
+        const buffer = tileSize * 2 * zoom;
+        
+        // Вычисляем границы чанка в изометрических координатах
+        const chunkStartX = chunk.chunkX * chunk.size;
+        const chunkStartY = chunk.chunkY * chunk.size;
+        const chunkEndX = chunkStartX + chunk.size;
+        const chunkEndY = chunkStartY + chunk.size;
+        
+        // Проверяем все углы чанка и его центр для более точного определения видимости
+        // В изометрии важно проверить больше точек из-за ромбовидной формы
+        const points = [
+            // Углы чанка
+            { x: chunkStartX, y: chunkStartY },
+            { x: chunkEndX, y: chunkStartY },
+            { x: chunkStartX, y: chunkEndY },
+            { x: chunkEndX, y: chunkEndY },
+            // Центр чанка
+            { x: (chunkStartX + chunkEndX) / 2, y: (chunkStartY + chunkEndY) / 2 },
+            // Середины рёбер (важно для изометрии)
+            { x: chunkStartX, y: (chunkStartY + chunkEndY) / 2 },
+            { x: chunkEndX, y: (chunkStartY + chunkEndY) / 2 },
+            { x: (chunkStartX + chunkEndX) / 2, y: chunkStartY },
+            { x: (chunkStartX + chunkEndX) / 2, y: chunkEndY }
+        ];
+        
+        // Центр экрана
+        const centerX = screenWidth / 2;
+        const centerY = screenHeight / 2;
+        
+        // Проверяем, находится ли хотя бы одна точка чанка в пределах экрана
+        for (const point of points) {
+            // Преобразуем изометрические координаты в экранные
+            const pos = isoTo2D(point.x, point.y);
+            
+            // Применяем камеру и зум для получения экранных координат
+            const screenX = centerX + (pos.x - cameraX) * zoom;
+            const screenY = centerY + (pos.y - cameraY) * zoom;
+            
+            // Проверяем, находится ли точка в пределах экрана с учётом буфера
+            // Используем полный буфер для обеих осей
+            if (screenX > -buffer && screenX < screenWidth + buffer &&
+                screenY > -buffer && screenY < screenHeight + buffer) {
+                return true;
+            }
+        }
+        
+        return false;
     }
 }
 

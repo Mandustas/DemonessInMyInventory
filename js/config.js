@@ -360,7 +360,9 @@ const GAME_CONFIG = {
 
     // Настройки отладки
     DEBUG: {
-        TELEPORT_ON_RIGHT_CLICK: true  // Включить телепортацию по правому клику
+        TELEPORT_ON_RIGHT_CLICK: true,  // Включить телепортацию по правому клику
+        ENABLE_FPS_COUNTER: false,      // Включить вывод отладочной информации о FPS и чанках
+        SHOW_CHUNK_INFO: false          // Показывать информацию о рендеринге чанков
     },
 
   // Настройки оптимизации производительности
