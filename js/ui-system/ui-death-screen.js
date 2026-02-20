@@ -1,32 +1,33 @@
 /**
- * UIMainMenu - главное меню игры
- * Изящный дарк фентези стиль с фоновым изображением
+ * UIDeathScreen - экран смерти персонажа
+ * Стилизованный экран с кнопками действий
  */
-class UIMainMenu extends UIComponent {
+class UIDeathScreen extends UIComponent {
     constructor(game, config = {}) {
         super(config);
 
         this.game = game;
 
-        // Размеры меню
+        // Размеры
         this.menuWidth = 500;
-        this.menuHeight = 400;
+        this.menuHeight = 350;
         this.padding = 25;
         this.buttonHeight = 45;
-        this.buttonGap = 12;
+        this.buttonGap = 15;
 
-        // Фоновое изображение
-        this.backgroundImage = null;
+        // Элементы
         this.backgroundSprite = null;
-
-        // Кнопки
+        this.menuContainer = null;
+        this.menuBg = null;
+        this.titleText = null;
+        this.subtitleText = null;
         this.buttons = {};
 
-        // Есть ли сохранение
-        this.hasSave = false;
+        // Фоновое изображение (затемнённое)
+        this.backgroundImage = null;
 
-        // Заголовок
-        this.titleText = null;
+        // Инициализация видимости
+        this._visible = config.visible !== false;
     }
 
     /**
@@ -36,7 +37,7 @@ class UIMainMenu extends UIComponent {
         // Загружаем фоновое изображение
         this.loadBackgroundImage();
 
-        // Создаем контейнер для меню (слева центрированный)
+        // Создаем контейнер для меню
         this.menuContainer = new PIXI.Container();
         this.container.addChild(this.menuContainer);
 
@@ -48,9 +49,6 @@ class UIMainMenu extends UIComponent {
 
         // Создаем кнопки
         this.createButtons();
-
-        // Проверяем наличие сохранения
-        this.checkSave();
     }
 
     /**
@@ -58,38 +56,36 @@ class UIMainMenu extends UIComponent {
      */
     loadBackgroundImage() {
         const bgPath = 'static/sound/images/mainmenu/mainmenu_img.jfif';
-        
-        // Создаем спрайт фона
+
         const texture = PIXI.Texture.from(bgPath);
         this.backgroundSprite = new PIXI.Sprite(texture);
-        
-        // Добавляем фон первым (под всем)
+
+        // Добавляем тёмный оверлей
+        this.overlayGraphics = new PIXI.Graphics();
+        this.container.addChildAt(this.overlayGraphics, 0);
         this.container.addChildAt(this.backgroundSprite, 0);
-        
-        // Обрабатываем загрузку текстуры
+
         texture.baseTexture.on('loaded', () => {
             this.resizeBackground();
         });
-        
-        // Если текстура уже загружена
+
         if (texture.baseTexture.valid) {
             this.resizeBackground();
         }
     }
 
     /**
-     * Масштабирование фона под размер экрана
+     * Масштабирование фона
      */
     resizeBackground() {
         if (!this.backgroundSprite || !this.backgroundSprite.texture.valid) return;
 
         const screenWidth = this.uiRenderer.app.screen.width;
         const screenHeight = this.uiRenderer.app.screen.height;
-        
+
         const textureWidth = this.backgroundSprite.texture.width;
         const textureHeight = this.backgroundSprite.texture.height;
 
-        // Масштабируем с сохранением пропорций, чтобы покрыть весь экран
         const scaleX = screenWidth / textureWidth;
         const scaleY = screenHeight / textureHeight;
         const scale = Math.max(scaleX, scaleY);
@@ -97,6 +93,26 @@ class UIMainMenu extends UIComponent {
         this.backgroundSprite.scale.set(scale);
         this.backgroundSprite.x = (screenWidth - textureWidth * scale) / 2;
         this.backgroundSprite.y = (screenHeight - textureHeight * scale) / 2;
+
+        // Рисуем тёмный оверлей
+        this.renderOverlay();
+    }
+
+    /**
+     * Отрисовка тёмного оверлея
+     */
+    renderOverlay() {
+        if (!this.overlayGraphics) return;
+
+        const g = this.overlayGraphics;
+        g.clear();
+
+        const screenWidth = this.uiRenderer.app.screen.width;
+        const screenHeight = this.uiRenderer.app.screen.height;
+
+        g.beginFill(0x000000, 0.85);
+        g.drawRect(0, 0, screenWidth, screenHeight);
+        g.endFill();
     }
 
     /**
@@ -114,30 +130,30 @@ class UIMainMenu extends UIComponent {
         const g = this.menuBg;
         g.clear();
 
-        // Градиентный фон меню
+        // Градиентный фон меню (тёмный, красно-коричневый)
         for (let i = 0; i < this.menuHeight; i++) {
             const t = i / (this.menuHeight - 1);
-            const r1 = 26, g1 = 20, b1 = 20;
-            const r2 = 13, g2 = 10, b2 = 10;
+            const r1 = 40, g1 = 10, b1 = 10;
+            const r2 = 15, g2 = 5, b2 = 5;
             const r = Math.round(r1 + (r2 - r1) * t);
             const gr = Math.round(g1 + (g2 - g1) * t);
             const b = Math.round(b1 + (b2 - b1) * t);
             const color = (r << 16) + (gr << 8) + b;
-            g.beginFill(color, 0.92);
+            g.beginFill(color, 0.95);
             g.drawRect(0, i, this.menuWidth, 1);
             g.endFill();
         }
 
         // Внешняя рамка
-        g.lineStyle(3, 0x3a2a1a);
+        g.lineStyle(3, 0x5a2a2a);
         g.drawRect(0, 0, this.menuWidth, this.menuHeight);
 
         // Толстая внешняя тень
-        g.lineStyle(6, 0x000000, 0.5);
+        g.lineStyle(6, 0x000000, 0.7);
         g.drawRect(-4, -4, this.menuWidth + 8, this.menuHeight + 8);
 
         // Внутренняя подсветка
-        g.lineStyle(1, 0x6a5a4a, 0.3);
+        g.lineStyle(1, 0x8a5a5a, 0.3);
         g.drawRect(4, 4, this.menuWidth - 8, this.menuHeight - 8);
 
         // Декоративные уголки
@@ -151,7 +167,7 @@ class UIMainMenu extends UIComponent {
         const cornerSize = 12;
         const margin = 8;
 
-        g.lineStyle(2, 0x6a5a4a);
+        g.lineStyle(2, 0x8a5a4a);
 
         // Верхний левый
         g.moveTo(margin, margin + cornerSize);
@@ -178,83 +194,41 @@ class UIMainMenu extends UIComponent {
      * Создание заголовка
      */
     createTitle() {
-        // Основной заголовок (первая строка)
-        this.titleText = new PIXI.Text('Скучно исследуя руины,', {
+        // Основной заголовок
+        this.titleText = new PIXI.Text('ВЫ ПОГИБЛИ', {
             fontFamily: "'MedievalSharp', Georgia, serif",
-            fontSize: 24,
-            fill: '#c9b896',
+            fontSize: 42,
+            fill: '#8b0000',
             fontWeight: 'bold',
             dropShadow: true,
-            dropShadowColor: '#000000',
-            dropShadowBlur: 6,
-            dropShadowDistance: 3,
-            dropShadowAngle: Math.PI / 4,
-            letterSpacing: 2,
-            wordWrap: true,
-            wordWrapWidth: this.menuWidth - 40,
-            align: 'center'
+            dropShadowColor: '#ff0000',
+            dropShadowBlur: 8,
+            dropShadowDistance: 4,
+            letterSpacing: 4,
+            stroke: '#3a0a0a',
+            strokeThickness: 2
         });
         this.titleText.anchor.set(0.5);
         this.titleText.x = this.menuWidth / 2;
-        this.titleText.y = this.padding + 20;
+        this.titleText.y = this.padding + 30;
         this.menuContainer.addChild(this.titleText);
 
-        // Вторая строка
-        this.subtitleText = new PIXI.Text('я наткнулся на древний артефакт, который,', {
+        // Подзаголовок
+        this.subtitleText = new PIXI.Text('Тьма поглотила вашу душу...', {
             fontFamily: "'MedievalSharp', Georgia, serif",
-            fontSize: 16,
-            fill: '#a89880',
+            fontSize: 18,
+            fill: '#6a5a5a',
             dropShadow: true,
             dropShadowColor: '#000000',
             dropShadowBlur: 3,
-            dropShadowDistance: 1,
-            wordWrap: true,
-            wordWrapWidth: this.menuWidth - 40,
-            align: 'center'
+            dropShadowDistance: 1
         });
         this.subtitleText.anchor.set(0.5);
         this.subtitleText.x = this.menuWidth / 2;
-        this.subtitleText.y = this.padding + 55;
+        this.subtitleText.y = this.padding + 85;
         this.menuContainer.addChild(this.subtitleText);
 
-        // Третья строка
-        this.subtitleText2 = new PIXI.Text('как выяснилось, является душой Королевы Демонов,', {
-            fontFamily: "'MedievalSharp', Georgia, serif",
-            fontSize: 16,
-            fill: '#a89880',
-            dropShadow: true,
-            dropShadowColor: '#000000',
-            dropShadowBlur: 3,
-            dropShadowDistance: 1,
-            wordWrap: true,
-            wordWrapWidth: this.menuWidth - 40,
-            align: 'center'
-        });
-        this.subtitleText2.anchor.set(0.5);
-        this.subtitleText2.x = this.menuWidth / 2;
-        this.subtitleText2.y = this.padding + 82;
-        this.menuContainer.addChild(this.subtitleText2);
-
-        // Четвёртая строка (финальная)
-        this.subtitleText3 = new PIXI.Text('и теперь она живёт у меня в инвентаре и даёт вредные советы по билду', {
-            fontFamily: "'MedievalSharp', Georgia, serif",
-            fontSize: 15,
-            fill: '#8a7a6a',
-            fontStyle: 'italic',
-            dropShadow: true,
-            dropShadowColor: '#000000',
-            dropShadowBlur: 3,
-            dropShadowDistance: 1,
-            wordWrap: true,
-            wordWrapWidth: this.menuWidth - 40,
-            align: 'center'
-        });
-        this.subtitleText3.anchor.set(0.5);
-        this.subtitleText3.x = this.menuWidth / 2;
-        this.subtitleText3.y = this.padding + 110;
-        this.menuContainer.addChild(this.subtitleText3);
-
-        // Декоративная линия под заголовком
+        // Декоративная линия
         this.titleLine = new PIXI.Graphics();
         this.menuContainer.addChild(this.titleLine);
     }
@@ -266,18 +240,16 @@ class UIMainMenu extends UIComponent {
         const g = this.titleLine;
         g.clear();
 
-        const y = this.padding + 145;
+        const y = this.padding + 120;
         const lineWidth = this.menuWidth - this.padding * 2;
 
-        // Линия
-        g.lineStyle(1, 0x3a2a1a);
+        g.lineStyle(2, 0x5a2a2a);
         g.moveTo(this.padding, y);
         g.lineTo(this.padding + lineWidth, y);
 
-        // Декоративная линия
-        g.lineStyle(1, 0x6a5a4a, 0.5);
-        g.moveTo(this.padding + 10, y + 2);
-        g.lineTo(this.padding + lineWidth - 10, y + 2);
+        g.lineStyle(1, 0x8a5a4a, 0.5);
+        g.moveTo(this.padding + 10, y + 3);
+        g.lineTo(this.padding + lineWidth - 10, y + 3);
     }
 
     /**
@@ -285,12 +257,11 @@ class UIMainMenu extends UIComponent {
      */
     createButtons() {
         const buttonConfig = [
-            { key: 'continue', text: 'ПРОДОЛЖИТЬ ИГРУ', action: 'continue', requiresSave: true },
-            { key: 'newGame', text: 'НОВАЯ ИГРА', action: 'newGame', requiresSave: false },
-            { key: 'exit', text: 'ВЫЙТИ', action: 'exit', requiresSave: false }
+            { key: 'mainMenu', text: 'В ГЛАВНОЕ МЕНЮ', action: 'mainMenu' },
+            { key: 'loadSave', text: 'ЗАГРУЗИТЬ СОХРАНЕНИЕ', action: 'loadSave', requiresSave: true }
         ];
 
-        const startY = this.padding + 170;
+        const startY = this.padding + 160;
         const buttonWidth = this.menuWidth - this.padding * 2;
 
         buttonConfig.forEach((config, index) => {
@@ -331,8 +302,7 @@ class UIMainMenu extends UIComponent {
             dropShadow: true,
             dropShadowColor: '#000000',
             dropShadowBlur: 2,
-            dropShadowDistance: 1,
-            dropShadowAngle: Math.PI / 4
+            dropShadowDistance: 1
         });
         button.textSprite.anchor.set(0.5);
         button.textSprite.x = width / 2;
@@ -389,9 +359,9 @@ class UIMainMenu extends UIComponent {
         g.clear();
 
         const colors = {
-            normal: { bgTop: 0x2a1a1a, bgBottom: 0x1a0f0f, border: 0x4a3a2a, text: '#c9b896' },
-            hover: { bgTop: 0x3a2a2a, bgBottom: 0x2a1a1a, border: 0x6a5a4a, text: '#e8d9b8' },
-            active: { bgTop: 0x1a0f0f, bgBottom: 0x0d0808, border: 0x3a2a1a, text: '#c9b896' },
+            normal: { bgTop: 0x3a1a1a, bgBottom: 0x1a0a0a, border: 0x5a3a2a, text: '#c9b896' },
+            hover: { bgTop: 0x4a2a2a, bgBottom: 0x2a1a1a, border: 0x7a5a4a, text: '#e8d9b8' },
+            active: { bgTop: 0x2a0a0a, bgBottom: 0x0d0808, border: 0x4a2a1a, text: '#c9b896' },
             disabled: { bgTop: 0x1a1a1a, bgBottom: 0x0d0d0d, border: 0x2a2a2a, text: '#5a5a5a' }
         };
 
@@ -428,23 +398,22 @@ class UIMainMenu extends UIComponent {
      */
     handleAction(action) {
         switch (action) {
-            case 'continue':
+            case 'mainMenu':
                 if (this.game) {
-                    this.game.continueGame();
+                    // Возрождаем персонажа перед выходом в меню
+                    if (this.game.character) {
+                        this.game.character.respawn();
+                    }
+                    this.game.exitToMainMenu();
+                    this.close();
                 }
                 break;
-            case 'newGame':
-                if (this.game) {
-                    this.game.startNewGame();
+            case 'loadSave':
+                if (this.game && this.game.saveSystem) {
+                    // Загружаем сохранение
+                    this.game.saveSystem.loadGame();
+                    this.close();
                 }
-                break;
-            case 'exit':
-                // Закрываем вкладку
-                window.close();
-                // Если не удалось закрыть, показываем сообщение
-                setTimeout(() => {
-                    alert('Нажмите Alt+F4 для выхода из игры.');
-                }, 100);
                 break;
         }
     }
@@ -453,19 +422,20 @@ class UIMainMenu extends UIComponent {
      * Проверка наличия сохранения
      */
     checkSave() {
+        let hasSave = false;
+
         if (this.game && this.game.saveSystem) {
-            this.hasSave = this.game.saveSystem.hasSave();
+            hasSave = this.game.saveSystem.hasSave();
         } else {
-            // Проверяем напрямую в localStorage
-            this.hasSave = !!localStorage.getItem(GAME_CONFIG.SAVE.KEY);
+            hasSave = !!localStorage.getItem('diabloSave');
         }
 
-        // Обновляем состояние кнопки продолжения (только если кнопки уже созданы)
-        if (this.buttons && this.buttons['continue']) {
-            const continueButton = this.buttons['continue'];
-            continueButton.enabled = this.hasSave;
-            continueButton.container.cursor = this.hasSave ? 'pointer' : 'default';
-            this.renderButton(continueButton);
+        // Обновляем состояние кнопки загрузки
+        if (this.buttons && this.buttons['loadSave']) {
+            const loadButton = this.buttons['loadSave'];
+            loadButton.enabled = hasSave;
+            loadButton.container.cursor = hasSave ? 'pointer' : 'default';
+            this.renderButton(loadButton);
         }
     }
 
@@ -478,14 +448,14 @@ class UIMainMenu extends UIComponent {
         const screenWidth = this.uiRenderer.app.screen.width;
         const screenHeight = this.uiRenderer.app.screen.height;
 
-        // Меню слева, центрированное по вертикали
-        const menuX = screenWidth * 0.15; // 15% от левого края
+        // Меню по центру
+        const menuX = (screenWidth - this.menuWidth) / 2;
         const menuY = (screenHeight - this.menuHeight) / 2;
 
         this.menuContainer.x = menuX;
         this.menuContainer.y = menuY;
 
-        // Обновляем фон
+        // Обновляем фон и оверлей
         this.resizeBackground();
         this.renderMenuBackground();
         this.renderTitleLine();
@@ -497,16 +467,18 @@ class UIMainMenu extends UIComponent {
     onOpen() {
         this.checkSave();
         this.updatePosition();
-        // Показываем фоновое изображение
+
+        // Показываем элементы
         if (this.backgroundSprite) {
             this.backgroundSprite.visible = true;
         }
+        if (this.overlayGraphics) {
+            this.overlayGraphics.visible = true;
+        }
 
-        // Запускаем музыку (если ещё не запущена)
-        if (this.game && this.game.audioSystem) {
-            if (!this.game.audioSystem.musicPlayer.isPlaying) {
-                this.game.audioSystem.playMusic('mainMenu', true);
-            }
+        // Приостанавливаем игру
+        if (this.game) {
+            this.game.gameState = 'death';
         }
     }
 
@@ -514,9 +486,12 @@ class UIMainMenu extends UIComponent {
      * Хук при закрытии
      */
     onClose() {
-        // Скрываем фоновое изображение
+        // Скрываем элементы
         if (this.backgroundSprite) {
             this.backgroundSprite.visible = false;
+        }
+        if (this.overlayGraphics) {
+            this.overlayGraphics.visible = false;
         }
     }
 
@@ -526,16 +501,18 @@ class UIMainMenu extends UIComponent {
     set visible(value) {
         if (this._visible === value) return;
         this._visible = value;
-        
+
         if (this.container) {
             this.container.visible = value;
         }
-        
-        // Управляем видимостью фона
+
         if (this.backgroundSprite) {
             this.backgroundSprite.visible = value;
         }
-        
+        if (this.overlayGraphics) {
+            this.overlayGraphics.visible = value;
+        }
+
         if (value) {
             this.onOpen();
         } else {
@@ -567,7 +544,7 @@ class UIMainMenu extends UIComponent {
 
 // Экспортируем класс
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = UIMainMenu;
+    module.exports = UIDeathScreen;
 } else if (typeof window !== 'undefined') {
-    window.UIMainMenu = UIMainMenu;
+    window.UIDeathScreen = UIDeathScreen;
 }

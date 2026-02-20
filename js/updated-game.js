@@ -8,22 +8,35 @@ class Game {
     constructor() {
         this.renderer = new PIXIRenderer('gameCanvas');
 
-        // Состояние игры - начинаем с главного меню
-        this.gameState = 'mainMenu';
-        
+        // Состояние игры - начинаем с splash screen
+        this.gameState = 'splash';
+
         // Флаг инициализации игры
         this.gameInitialized = false;
 
         // Инициализируем UI менеджер первым
         this.uiManager = new UIManager(this.renderer);
 
-        // Создаем главное меню
-        this.uiMainMenu = new UIMainMenu(this, { visible: true });
+        // Создаем splash screen (вступительный экран)
+        this.uiSplashScreen = new UISplashScreen(this, { visible: true });
+        this.uiManager.register('splashScreen', this.uiSplashScreen);
+
+        // Создаем главное меню (скрыто по умолчанию)
+        this.uiMainMenu = new UIMainMenu(this, { visible: false });
         this.uiManager.register('mainMenu', this.uiMainMenu);
+
+        // Создаем экран смерти
+        this.uiDeathScreen = new UIDeathScreen(this, { visible: false });
+        this.uiManager.register('deathScreen', this.uiDeathScreen);
 
         // Создаем экран загрузки
         this.uiLoadingScreen = new UILoadingScreen(this, { visible: false });
         this.uiManager.register('loadingScreen', this.uiLoadingScreen);
+
+        // Инициализируем аудио систему
+        this.audioSystem = new AudioSystem();
+
+        // Музыка запустится при первом клике пользователя (обход блокировки автовоспроизведения браузером)
     }
 
     /**
@@ -177,19 +190,32 @@ class Game {
      * Начать новую игру
      */
     startNewGame() {
+        // Закрываем splash screen если открыт
+        if (this.uiSplashScreen && this.uiSplashScreen.visible) {
+            this.uiSplashScreen.close();
+        }
+
         // Закрываем главное меню (это скроет и фон)
         this.uiMainMenu.close();
-        
+
+        // Затухание музыки главного меню
+        if (this.audioSystem) {
+            this.audioSystem.fadeOutMusic(1500);
+        }
+
         // Запускаем экран загрузки
         this.uiLoadingScreen.start(() => {
             // Инициализируем игру
             this.initGame();
-            
+
             // Закрываем экран загрузки
             this.uiLoadingScreen.close();
-            
-            // Переходим в состояние игры
+
+            // Переходим в состояние игры и запускаем музыку openworld
             this.gameState = 'playing';
+            if (this.audioSystem) {
+                this.audioSystem.playMusic('openworld', true);
+            }
         }, 2000);
     }
 
@@ -197,24 +223,37 @@ class Game {
      * Продолжить игру из сохранения
      */
     continueGame() {
+        // Закрываем splash screen если открыт
+        if (this.uiSplashScreen && this.uiSplashScreen.visible) {
+            this.uiSplashScreen.close();
+        }
+
         // Закрываем главное меню (это скроет и фон)
         this.uiMainMenu.close();
-        
+
+        // Затухание музыки главного меню
+        if (this.audioSystem) {
+            this.audioSystem.fadeOutMusic(2000);
+        }
+
         // Запускаем экран загрузки
         this.uiLoadingScreen.start(() => {
             // Инициализируем игру
             this.initGame();
-            
+
             // Загружаем сохранение
             if (this.saveSystem) {
                 this.saveSystem.loadGame();
             }
-            
+
             // Закрываем экран загрузки
             this.uiLoadingScreen.close();
-            
-            // Переходим в состояние игры
+
+            // Переходим в состояние игры и запускаем музыку openworld
             this.gameState = 'playing';
+            if (this.audioSystem) {
+                this.audioSystem.playMusic('openworld', true);
+            }
         }, 2500);
     }
 
@@ -223,13 +262,26 @@ class Game {
      */
     exitToMainMenu() {
         this.gameState = 'mainMenu';
-        
+
+        // Останавливаем музыку игры и запускаем музыку главного меню
+        if (this.audioSystem) {
+            this.audioSystem.fadeOutMusic(500);
+            setTimeout(() => {
+                this.audioSystem.playMusic('mainMenu', true);
+            }, 600);
+        }
+
         // Скрываем игровые UI элементы
         if (this.uiSkillBar) this.uiSkillBar.visible = false;
         if (this.uiMinimap) this.uiMinimap.visible = false;
         if (this.uiPanelButtons) this.uiPanelButtons.visible = false;
         if (this.uiActionLog) this.uiActionLog.visible = false;
-        
+
+        // Закрываем splash screen если открыт
+        if (this.uiSplashScreen && this.uiSplashScreen.visible) {
+            this.uiSplashScreen.close();
+        }
+
         // Показываем главное меню
         this.uiMainMenu.visible = true;
         this.uiMainMenu.checkSave();
@@ -240,6 +292,30 @@ class Game {
      */
     resetGame() {
         this.exitToMainMenu();
+    }
+
+    /**
+     * Показать экран смерти
+     */
+    showDeathScreen() {
+        // Приостанавливаем игру
+        this.gameState = 'death';
+
+        // Останавливаем музыку игры
+        if (this.audioSystem) {
+            this.audioSystem.fadeOutMusic(500);
+        }
+
+        // Скрываем игровые UI элементы
+        if (this.uiSkillBar) this.uiSkillBar.visible = false;
+        if (this.uiMinimap) this.uiMinimap.visible = false;
+        if (this.uiPanelButtons) this.uiPanelButtons.visible = false;
+        if (this.uiActionLog) this.uiActionLog.visible = false;
+
+        // Показываем экран смерти
+        if (this.uiDeathScreen) {
+            this.uiDeathScreen.open();
+        }
     }
 
     /**
@@ -1498,6 +1574,11 @@ class Game {
         // Рендерим снаряды
         if (this.projectileManager) {
             this.projectileManager.render(this.renderer);
+        }
+
+        // Обновляем UI менеджеры (всегда, даже во время смерти)
+        if (this.uiManager) {
+            this.uiManager.update(deltaTime);
         }
 
         // При необходимости рендерим сетку (для отладки)

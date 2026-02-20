@@ -317,8 +317,6 @@ class UILoadingScreen extends UIComponent {
      * @param {number} duration - длительность в мс (по умолчанию 2500)
      */
     start(onComplete, duration = 2500) {
-        console.log('[LoadingScreen] start() called, duration:', duration);
-
         // Сначала открываем экран (вызовет reset())
         this.open();
 
@@ -335,8 +333,6 @@ class UILoadingScreen extends UIComponent {
 
         // Запускаем собственный цикл анимации
         this.startAnimationLoop();
-
-        console.log('[LoadingScreen] isOpen:', this.isOpen, 'visible:', this._visible, 'isLoading:', this.isLoading);
     }
 
     /**
@@ -424,7 +420,6 @@ class UILoadingScreen extends UIComponent {
         // Анимация прогресса
         if (this.isLoading && this.progress < this.targetProgress) {
             this.progress += this.loadingSpeed;
-            console.log('[LoadingScreen] progress:', this.progress.toFixed(2));
             
             if (this.progress >= this.targetProgress) {
                 this.progress = 1;
