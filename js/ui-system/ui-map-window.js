@@ -35,6 +35,12 @@ class UIMapWindow extends UIComponent {
         // Флаги для оптимизации обновления
         this.mapTilesNeedUpdate = true;
         this.lastEnemyCount = 0;
+        this.lastExploredCount = 0; // Для отслеживания новых исследованных тайлов
+        this.renderedTiles = new Set(); // Уже отрисованные тайлы
+        
+        // Для отслеживания перемещения игрока и обновления видимости
+        this.lastRenderedPlayerTile = { x: -9999, y: -9999 };
+        this.visibilityUpdateThreshold = 2; // Минимальное расстояние для обновления
         
         // Флаги для отрисовки контента
         this.contentInitialized = false;
@@ -261,6 +267,18 @@ class UIMapWindow extends UIComponent {
     onOpen() {
         this.mapTilesNeedUpdate = true; // Сбрасываем флаг для перерисовки тайлов
         this.lastEnemyCount = 0; // Сбрасываем для пересоздания маркеров
+        
+        // Инициализируем счётчик исследованных тайлов
+        if (this.game.fogOfWar) {
+            this.lastExploredCount = this.game.fogOfWar.explored.size;
+        }
+        
+        // Инициализируем позицию игрока для отслеживания перемещения
+        if (this.game.character) {
+            const tilePos = getTileIndex(this.game.character.x, this.game.character.y);
+            this.lastRenderedPlayerTile = { x: tilePos.tileX, y: tilePos.tileY };
+        }
+        
         this.updateMap();
         this.centerOnPlayer();
     }
@@ -321,10 +339,104 @@ class UIMapWindow extends UIComponent {
     update() {
         if (!this.game || !this.isOpen) return;
         
+        // Проверяем перемещение игрока для обновления видимости
+        const playerMoved = this.checkPlayerMovement();
+        
+        // Проверяем, есть ли новые исследованные тайлы
+        this.checkForNewExploredTiles(playerMoved);
+        
         // Обновляем только маркеры
         this.updatePlayerMarker();
         this.updateEnemyMarkers();
         this.updateInfo();
+    }
+    
+    /**
+     * Проверка перемещения игрока
+     * @returns {boolean} - true если игрок переместился достаточно для обновления карты
+     */
+    checkPlayerMovement() {
+        if (!this.game.character) return false;
+        
+        const tilePos = getTileIndex(this.game.character.x, this.game.character.y);
+        const dx = tilePos.tileX - this.lastRenderedPlayerTile.x;
+        const dy = tilePos.tileY - this.lastRenderedPlayerTile.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        return distance >= this.visibilityUpdateThreshold;
+    }
+    
+    /**
+     * Проверка новых исследованных тайлов и обновление видимости
+     * @param {boolean} playerMoved - переместился ли игрок
+     */
+    checkForNewExploredTiles(playerMoved) {
+        const fogOfWar = this.game.fogOfWar;
+        if (!fogOfWar) return;
+        
+        const currentExploredCount = fogOfWar.explored.size;
+        const exploredChanged = currentExploredCount !== this.lastExploredCount;
+        
+        // Если игрок переместился ИЛИ исследованы новые тайлы - перерисовываем карту
+        if (playerMoved || exploredChanged) {
+            // Собираем новые данные о тайлах
+            this.collectMapData();
+            
+            // Полная перерисовка карты для корректного отображения видимости
+            this.renderMapTiles();
+            
+            // Обновляем счётчики
+            this.lastExploredCount = currentExploredCount;
+            
+            // Запоминаем позицию игрока при последней перерисовке
+            if (this.game.character) {
+                const tilePos = getTileIndex(this.game.character.x, this.game.character.y);
+                this.lastRenderedPlayerTile = { x: tilePos.tileX, y: tilePos.tileY };
+            }
+        }
+    }
+    
+    /**
+     * Инкрементальная отрисовка только новых исследованных тайлов
+     */
+    renderNewTiles() {
+        const fogOfWar = this.game.fogOfWar;
+        const fogEnabled = GAME_CONFIG.FOG_OF_WAR.ENABLED && fogOfWar;
+        
+        // Рисуем только тайлы, которые ещё не отрисованы
+        for (const [key, tileType] of this.mapData) {
+            // Пропускаем уже отрисованные тайлы
+            if (this.renderedTiles.has(key)) continue;
+            
+            const [tileX, tileY] = key.split(',').map(Number);
+            
+            // Проверяем туман войны
+            if (fogEnabled) {
+                // Неисследованный тайл - не отображаем
+                if (!fogOfWar.isTileExplored(tileX, tileY)) {
+                    continue;
+                }
+            }
+            
+            // Преобразуем в изометрические координаты
+            const pos = this.tileToMapIso(tileX, tileY);
+            
+            // Определяем цвет тайла
+            let color = this.tileColors[tileType] || this.tileColors[0];
+            
+            // Если тайл исследован но не виден - затемняем
+            if (fogEnabled && !fogOfWar.isTileVisible(tileX, tileY)) {
+                color = this.darkenColor(color, 0.4);
+            }
+            
+            // Рисуем изометрический тайл
+            this.mapGraphics.beginFill(color);
+            this.drawIsoTile(this.mapGraphics, pos.x, pos.y, this.tileScale * 0.9);
+            this.mapGraphics.endFill();
+            
+            // Отмечаем тайл как отрисованный
+            this.renderedTiles.add(key);
+        }
     }
 
     /**
@@ -358,39 +470,50 @@ class UIMapWindow extends UIComponent {
 
     /**
      * Отрисовка тайлов карты в изометрической проекции
+     * Визуализация тумана войны: только исследованные области
+     * - Неисследованные: не отображаются
+     * - Исследованные но не видимые: затемнены, рельеф виден
+     * - Видимые: обычный цвет
      */
     renderMapTiles() {
         const fogOfWar = this.game.fogOfWar;
         const fogEnabled = GAME_CONFIG.FOG_OF_WAR.ENABLED && fogOfWar;
         
+        // Очищаем графику и список отрисованных тайлов
+        this.mapGraphics.clear();
+        this.renderedTiles.clear();
+        
         // Рисуем все известные тайлы
         for (const [key, tileType] of this.mapData) {
             const [tileX, tileY] = key.split(',').map(Number);
 
+            // Проверяем туман войны
+            if (fogEnabled) {
+                // Неисследованный тайл - не отображаем вообще
+                if (!fogOfWar.isTileExplored(tileX, tileY)) {
+                    continue;
+                }
+            }
+
             // Преобразуем в изометрические координаты
             const pos = this.tileToMapIso(tileX, tileY);
 
-            // Проверяем туман войны
-            let color;
-            if (fogEnabled) {
-                if (!fogOfWar.isTileExplored(tileX, tileY)) {
-                    // Неисследованный тайл - полностью тёмный
-                    color = this.fogColors.unexplored;
-                } else if (!fogOfWar.isTileVisible(tileX, tileY)) {
-                    // Исследованный, но не видимый сейчас - затемнённый
-                    color = this.fogColors.explored;
-                } else {
-                    // Видимый тайл - нормальный цвет
-                    color = this.tileColors[tileType] || this.tileColors[0];
-                }
-            } else {
-                color = this.tileColors[tileType] || this.tileColors[0];
+            // Определяем цвет тайла
+            let color = this.tileColors[tileType] || this.tileColors[0];
+
+            // Если тайл исследован но не виден - затемняем оригинальный цвет
+            if (fogEnabled && !fogOfWar.isTileVisible(tileX, tileY)) {
+                // Затемняем до 40% от оригинала (сохраняем рельеф)
+                color = this.darkenColor(color, 0.4);
             }
 
             // Рисуем изометрический тайл
             this.mapGraphics.beginFill(color);
             this.drawIsoTile(this.mapGraphics, pos.x, pos.y, this.tileScale * 0.9);
             this.mapGraphics.endFill();
+            
+            // Отмечаем тайл как отрисованный
+            this.renderedTiles.add(key);
         }
     }
 
@@ -403,6 +526,27 @@ class UIMapWindow extends UIComponent {
         ctx.lineTo(x, y + size * 0.5);
         ctx.lineTo(x - size, y);
         ctx.closePath();
+    }
+
+    /**
+     * Затемнение цвета (сохраняет оттенок)
+     * @param {number} color - HEX цвет (0xRRGGBB)
+     * @param {number} factor - коэффициент затемнения (0-1, где 0 = чёрный, 1 = оригинал)
+     * @returns {number} - затемнённый цвет в формате 0xRRGGBB
+     */
+    darkenColor(color, factor) {
+        // Извлекаем RGB компоненты
+        const r = (color >> 16) & 0xFF;
+        const g = (color >> 8) & 0xFF;
+        const b = color & 0xFF;
+        
+        // Затемняем умножением на коэффициент
+        const darkR = Math.round(r * factor);
+        const darkG = Math.round(g * factor);
+        const darkB = Math.round(b * factor);
+        
+        // Собираем обратно в HEX
+        return (darkR << 16) | (darkG << 8) | darkB;
     }
 
     /**

@@ -1635,11 +1635,7 @@ class PIXIRenderer {
 
                 // Применяем освещение с мировыми координатами
                 this.lightingSystem.applyLightingToSprite(sprite, worldX, worldY, tileType);
-                
-                // Применяем туман войны, если система активна
-                if (this.fogOfWar) {
-                    this.fogOfWar.applyFogToSprite(sprite, sprite.tileX, sprite.tileY);
-                }
+                // Визуализация тумана войны убрана - используется только освещение
             }
         }
     }

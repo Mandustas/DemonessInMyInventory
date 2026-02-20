@@ -261,6 +261,10 @@ class UIMinimap extends UIComponent {
 
     /**
      * Рисование активных чанков на миникарте
+     * Визуализация тумана войны: только исследованные области
+     * - Неисследованные: не отображаются
+     * - Исследованные но не видимые: затемнены, рельеф виден
+     * - Видимые: обычный цвет
      */
     drawActiveChunks(ctx, playerTileX, playerTileY) {
         const chunkSystem = this.game.chunkSystem;
@@ -291,14 +295,10 @@ class UIMinimap extends UIComponent {
                     }
 
                     // Проверяем туман войны
-                    let fogColor = null;
                     if (fogEnabled) {
+                        // Неисследованный тайл - не отображаем вообще
                         if (!fogOfWar.isTileExplored(worldTileX, worldTileY)) {
-                            // Неисследованный тайл - полностью тёмный
-                            fogColor = this.colors.unexplored;
-                        } else if (!fogOfWar.isTileVisible(worldTileX, worldTileY)) {
-                            // Исследованный, но не видимый сейчас - затемнённый
-                            fogColor = this.colors.explored;
+                            continue;
                         }
                     }
 
@@ -322,13 +322,15 @@ class UIMinimap extends UIComponent {
                         color = this.colors.decor;
                     }
 
-                    if (fogColor) {
-                        // Рисуем затемнённый тайл (туман войны)
-                        ctx.beginFill(this.hexToDecimal(fogColor));
-                        this.drawIsoTile(ctx, pos.x, pos.y, this.scale * 0.9);
-                        ctx.endFill();
-                    } else if (color) {
-                        ctx.beginFill(this.hexToDecimal(color));
+                    if (color) {
+                        // Если тайл исследован но не виден - затемняем оригинальный цвет
+                        let finalColor = this.hexToDecimal(color);
+                        if (fogEnabled && !fogOfWar.isTileVisible(worldTileX, worldTileY)) {
+                            // Затемняем до 40% от оригинала (сохраняем рельеф)
+                            finalColor = this.darkenColor(color, 0.4);
+                        }
+                        
+                        ctx.beginFill(finalColor);
                         this.drawIsoTile(ctx, pos.x, pos.y, this.scale * 0.9);
                         ctx.endFill();
                     }
@@ -393,6 +395,30 @@ class UIMinimap extends UIComponent {
     hexToDecimal(hexColor) {
         if (typeof hexColor === 'number') return hexColor;
         return parseInt(hexColor.replace('#', '0x'));
+    }
+
+    /**
+     * Затемнение цвета (сохраняет оттенок)
+     * @param {string|number} hexColor - HEX цвет (#RRGGBB или 0xRRGGBB)
+     * @param {number} factor - коэффициент затемнения (0-1, где 0 = чёрный, 1 = оригинал)
+     * @returns {number} - затемнённый цвет в формате 0xRRGGBB
+     */
+    darkenColor(hexColor, factor) {
+        // Конвертируем в число если это строка
+        let color = typeof hexColor === 'string' ? this.hexToDecimal(hexColor) : hexColor;
+        
+        // Извлекаем RGB компоненты
+        const r = (color >> 16) & 0xFF;
+        const g = (color >> 8) & 0xFF;
+        const b = color & 0xFF;
+        
+        // Затемняем умножением на коэффициент
+        const darkR = Math.round(r * factor);
+        const darkG = Math.round(g * factor);
+        const darkB = Math.round(b * factor);
+        
+        // Собираем обратно в HEX
+        return (darkR << 16) | (darkG << 8) | darkB;
     }
 
     /**
