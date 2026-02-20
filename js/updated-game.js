@@ -8,6 +8,31 @@ class Game {
     constructor() {
         this.renderer = new PIXIRenderer('gameCanvas');
 
+        // Состояние игры - начинаем с главного меню
+        this.gameState = 'mainMenu';
+        
+        // Флаг инициализации игры
+        this.gameInitialized = false;
+
+        // Инициализируем UI менеджер первым
+        this.uiManager = new UIManager(this.renderer);
+
+        // Создаем главное меню
+        this.uiMainMenu = new UIMainMenu(this, { visible: true });
+        this.uiManager.register('mainMenu', this.uiMainMenu);
+
+        // Создаем экран загрузки
+        this.uiLoadingScreen = new UILoadingScreen(this, { visible: false });
+        this.uiManager.register('loadingScreen', this.uiLoadingScreen);
+    }
+
+    /**
+     * Инициализация игровой части (вызывается после главного меню)
+     */
+    initGame() {
+        if (this.gameInitialized) return;
+        this.gameInitialized = true;
+
         // Инициализируем систему чанков со связной генерацией карты
         this.chunkSystem = new ConnectedChunkSystem(GAME_CONFIG.INITIAL_CHUNK_SIZE); // Чанки размером 16x16 тайлов
 
@@ -30,15 +55,11 @@ class Game {
             }
         };
 
-        // Состояние игры
-        this.gameState = 'playing';
-
         // Управление
         this.keys = {};
 
         // === НОВАЯ СИСТЕМА UI НА PIXI ===
-        // Инициализация UIManager
-        this.uiManager = new UIManager(this.renderer);
+        // UIManager уже создан в конструкторе, только регистрируем новые компоненты
 
         // Регистрируем новые UI компоненты
         this.uiSkillBar = new UISkillBar(this.character);
@@ -147,6 +168,78 @@ class Game {
         // Обработчик изменения размера окна
         window.addEventListener('resize', () => this.handleResize());
         this.handleResize(); // Установить начальный размер
+
+        // Инициализируем систему сохранения
+        this.saveSystem = new SaveSystem(this);
+    }
+
+    /**
+     * Начать новую игру
+     */
+    startNewGame() {
+        // Закрываем главное меню (это скроет и фон)
+        this.uiMainMenu.close();
+        
+        // Запускаем экран загрузки
+        this.uiLoadingScreen.start(() => {
+            // Инициализируем игру
+            this.initGame();
+            
+            // Закрываем экран загрузки
+            this.uiLoadingScreen.close();
+            
+            // Переходим в состояние игры
+            this.gameState = 'playing';
+        }, 2000);
+    }
+
+    /**
+     * Продолжить игру из сохранения
+     */
+    continueGame() {
+        // Закрываем главное меню (это скроет и фон)
+        this.uiMainMenu.close();
+        
+        // Запускаем экран загрузки
+        this.uiLoadingScreen.start(() => {
+            // Инициализируем игру
+            this.initGame();
+            
+            // Загружаем сохранение
+            if (this.saveSystem) {
+                this.saveSystem.loadGame();
+            }
+            
+            // Закрываем экран загрузки
+            this.uiLoadingScreen.close();
+            
+            // Переходим в состояние игры
+            this.gameState = 'playing';
+        }, 2500);
+    }
+
+    /**
+     * Выйти в главное меню
+     */
+    exitToMainMenu() {
+        this.gameState = 'mainMenu';
+        
+        // Скрываем игровые UI элементы
+        if (this.uiSkillBar) this.uiSkillBar.visible = false;
+        if (this.uiMinimap) this.uiMinimap.visible = false;
+        if (this.uiPanelButtons) this.uiPanelButtons.visible = false;
+        if (this.uiActionLog) this.uiActionLog.visible = false;
+        
+        // Показываем главное меню
+        this.uiMainMenu.visible = true;
+        this.uiMainMenu.checkSave();
+    }
+
+    /**
+     * Сбросить игру (из меню паузы)
+     */
+    resetGame() {
+        this.exitToMainMenu();
     }
 
     /**
@@ -1355,6 +1448,11 @@ class Game {
      * @param {number} deltaTime - время с последнего обновления в миллисекундах
      */
     render(deltaTime = 16.67) {
+        // Если игра не инициализирована, рендерим только UI
+        if (!this.gameInitialized) {
+            return;
+        }
+
         // Очищаем холст
         this.renderer.clear();
 
@@ -1371,7 +1469,9 @@ class Game {
         this.renderer.renderWithDepth(allRenderables, (obj) => obj.render());
 
         // Рендерим выпавшие предметы через PIXI
-        this.renderer.renderItems(this.itemDropSystem.drops, this.hoveredItemDrop);
+        if (this.itemDropSystem) {
+            this.renderer.renderItems(this.itemDropSystem.drops, this.hoveredItemDrop);
+        }
 
         // Обновляем и рендерим тултип предмета
         if (this.itemTooltip && this.hoveredItemDrop) {
@@ -1381,10 +1481,14 @@ class Game {
         // Миникарта обновляется автоматически через UIManager
 
         // Рендерим эффект получения уровня
-        this.levelUpEffect.render(deltaTime);
+        if (this.levelUpEffect) {
+            this.levelUpEffect.render(deltaTime);
+        }
 
         // Рендерим боевые эффекты
-        this.combatEffects.render(deltaTime);
+        if (this.combatEffects) {
+            this.combatEffects.render(deltaTime);
+        }
 
         // Рендерим факелы
         if (this.torchManager) {

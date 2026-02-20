@@ -249,7 +249,9 @@ const UIConfig = {
         minimap: { x: 'left', y: 'bottom', anchor: { x: 0, y: 1 }, leftOffset: 20, bottomOffset: 20 },
         panelButtons: { x: 'right', y: 'top', anchor: { x: 1, y: 0 }, rightOffset: 20, topOffset: 20 },
         pauseMenu: { x: '50%', y: '50%', anchor: { x: 0.5, y: 0.5 } },
-        actionLog: { x: 'right', y: 'bottom', anchor: { x: 1, y: 1 }, rightOffset: 20, bottomOffset: 20 }
+        actionLog: { x: 'right', y: 'bottom', anchor: { x: 1, y: 1 }, rightOffset: 20, bottomOffset: 20 },
+        mainMenu: { x: '50%', y: '50%', anchor: { x: 0.5, y: 0.5 } },
+        loadingScreen: { x: '50%', y: '50%', anchor: { x: 0.5, y: 0.5 } }
     },
 
     // Анимации
