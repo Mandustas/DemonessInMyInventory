@@ -31,6 +31,15 @@ class UIMapWindow extends UIComponent {
         // Кеш данных карты
         this.mapData = new Map();
         this.lastPlayerTile = { x: 0, y: 0 };
+        
+        // Флаги для оптимизации обновления
+        this.mapTilesNeedUpdate = true;
+        this.lastEnemyCount = 0;
+        
+        // Флаги для отрисовки контента
+        this.contentInitialized = false;
+        this.legendInitialized = false;
+        this.closeButtonInitialized = false;
 
         // Цвета тайлов для карты
         this.tileColors = {
@@ -244,6 +253,8 @@ class UIMapWindow extends UIComponent {
      * Хук при открытии
      */
     onOpen() {
+        this.mapTilesNeedUpdate = true; // Сбрасываем флаг для перерисовки тайлов
+        this.lastEnemyCount = 0; // Сбрасываем для пересоздания маркеров
         this.updateMap();
         this.centerOnPlayer();
     }
@@ -279,14 +290,14 @@ class UIMapWindow extends UIComponent {
     updateMap() {
         if (!this.game.chunkSystem) return;
 
-        // Очищаем графику
-        this.mapGraphics.clear();
-
         // Собираем данные о тайлах
         this.collectMapData();
 
-        // Рисуем карту
-        this.renderMapTiles();
+        // Рисуем карту (только если нужно)
+        if (this.mapTilesNeedUpdate) {
+            this.renderMapTiles();
+            this.mapTilesNeedUpdate = false;
+        }
 
         // Обновляем маркер игрока
         this.updatePlayerMarker();
@@ -295,6 +306,18 @@ class UIMapWindow extends UIComponent {
         this.updateEnemyMarkers();
 
         // Обновляем информацию
+        this.updateInfo();
+    }
+
+    /**
+     * Обновление маркеров в реальном времени (без перерисовки тайлов)
+     */
+    update() {
+        if (!this.game || !this.isOpen) return;
+        
+        // Обновляем только маркеры
+        this.updatePlayerMarker();
+        this.updateEnemyMarkers();
         this.updateInfo();
     }
 
@@ -377,23 +400,35 @@ class UIMapWindow extends UIComponent {
      * Обновление маркеров врагов
      */
     updateEnemyMarkers() {
-        // Очищаем старые маркеры
-        this.enemyMarkers.removeChildren();
-
         if (!this.game.enemies) return;
 
-        for (const enemy of this.game.enemies) {
+        const enemies = this.game.enemies;
+        
+        // Проверяем, изменилось ли количество врагов
+        if (enemies.length !== this.lastEnemyCount) {
+            // Пересоздаем маркеры при изменении количества врагов
+            this.enemyMarkers.removeChildren();
+            this.lastEnemyCount = enemies.length;
+            
+            // Создаем новые маркеры
+            for (let i = 0; i < enemies.length; i++) {
+                const marker = new PIXI.Graphics();
+                marker.beginFill(0xFF4444);
+                marker.drawCircle(0, 0, 4);
+                marker.endFill();
+                this.enemyMarkers.addChild(marker);
+            }
+        }
+        
+        // Обновляем позиции существующих маркеров
+        const markers = this.enemyMarkers.children;
+        for (let i = 0; i < enemies.length && i < markers.length; i++) {
+            const enemy = enemies[i];
             const tilePos = getTileIndex(enemy.x, enemy.y);
             const pos = this.tileToMapIso(tilePos.tileX, tilePos.tileY);
-
-            const marker = new PIXI.Graphics();
-            marker.beginFill(0xFF4444);
-            marker.drawCircle(0, 0, 4);
-            marker.endFill();
-            marker.x = pos.x;
-            marker.y = pos.y;
-
-            this.enemyMarkers.addChild(marker);
+            
+            markers[i].x = pos.x;
+            markers[i].y = pos.y;
         }
     }
 
@@ -484,6 +519,10 @@ class UIMapWindow extends UIComponent {
      * Отрисовка содержимого
      */
     renderContent() {
+        // Создаём элементы только один раз при первой отрисовке
+        if (this.contentInitialized) return;
+        this.contentInitialized = true;
+
         // Заголовок "КАРТА МИРА"
         const titleStyle = new PIXI.TextStyle({
             fontFamily: "'MedievalSharp', Georgia, serif",
@@ -497,18 +536,18 @@ class UIMapWindow extends UIComponent {
             dropShadowAngle: Math.PI / 4
         });
 
-        const title = new PIXI.Text('КАРТА МИРА', titleStyle);
-        title.anchor.set(0.5, 0);
-        title.x = this.width / 2;
-        title.y = this.padding;
-        this.container.addChild(title);
+        this.titleText = new PIXI.Text('КАРТА МИРА', titleStyle);
+        this.titleText.anchor.set(0.5, 0);
+        this.titleText.x = this.width / 2;
+        this.titleText.y = this.padding;
+        this.container.addChild(this.titleText);
 
         // Линия под заголовком
-        const line = new PIXI.Graphics();
-        line.lineStyle(1, 0x3a2a1a);
-        line.moveTo(this.padding, 50);
-        line.lineTo(this.width - this.padding, 50);
-        this.container.addChild(line);
+        this.titleLine = new PIXI.Graphics();
+        this.titleLine.lineStyle(1, 0x3a2a1a);
+        this.titleLine.moveTo(this.padding, 50);
+        this.titleLine.lineTo(this.width - this.padding, 50);
+        this.container.addChild(this.titleLine);
 
         // Текст зума
         this.zoomText = new PIXI.Text(`Зум: ${Math.round(this.mapZoom * 100)}%`, {
@@ -526,12 +565,19 @@ class UIMapWindow extends UIComponent {
 
         // Легенда
         this.renderLegend();
+        
+        // Кнопка закрытия
+        this.createCloseButton();
     }
 
     /**
      * Отрисовка легенды
      */
     renderLegend() {
+        // Создаём легенду только один раз
+        if (this.legendInitialized) return;
+        this.legendInitialized = true;
+        
         const legendX = this.padding;
         const legendY = this.height - 55;
 
@@ -571,6 +617,10 @@ class UIMapWindow extends UIComponent {
      * Создание кнопки закрытия
      */
     createCloseButton() {
+        // Создаём кнопку только один раз
+        if (this.closeButtonInitialized) return;
+        this.closeButtonInitialized = true;
+        
         const closeBtn = new UIButton({
             x: this.width - 80,
             y: 8,
@@ -581,59 +631,6 @@ class UIMapWindow extends UIComponent {
             onClick: () => this.close()
         });
         this.addChild(closeBtn);
-    }
-
-    /**
-     * Хук инициализации - переопределен
-     */
-    onInit() {
-        // Создаем контейнер для карты
-        this.mapContainer = new PIXI.Container();
-        this.mapContainer.x = this.padding;
-        this.mapContainer.y = 60;
-        this.container.addChild(this.mapContainer);
-
-        // Создаем маску для обрезки карты
-        this.createMapMask();
-
-        // Создаем контейнер для содержимого карты (с зумом)
-        this.mapContent = new PIXI.Container();
-        this.mapContainer.addChild(this.mapContent);
-
-        // Графика для отрисовки карты
-        this.mapGraphics = new PIXI.Graphics();
-        this.mapContent.addChild(this.mapGraphics);
-
-        // Маркер игрока
-        this.playerMarker = this.createPlayerMarker();
-        this.mapContent.addChild(this.playerMarker);
-
-        // Контейнер для маркеров врагов
-        this.enemyMarkers = new PIXI.Container();
-        this.mapContent.addChild(this.enemyMarkers);
-
-        // Создаем заголовок и легенду
-        this.renderContent();
-
-        // Создаем кнопку закрытия
-        this.createCloseButton();
-
-        // Текст с информацией
-        this.infoText = new PIXI.Text('', {
-            fontFamily: "'MedievalSharp', Georgia, serif",
-            fontSize: 12,
-            fill: '#8a7a6a',
-            dropShadow: true,
-            dropShadowColor: '#000000',
-            dropShadowBlur: 2,
-            dropShadowDistance: 1
-        });
-        this.infoText.x = this.padding;
-        this.infoText.y = this.height - 35;
-        this.container.addChild(this.infoText);
-
-        // Настройка событий
-        this.setupEvents();
     }
 }
 

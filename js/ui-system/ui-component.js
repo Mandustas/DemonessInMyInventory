@@ -180,6 +180,7 @@ class UIComponent {
         this.isOpen = true;
         this.visible = true;
         this.updatePosition();
+        this.render(); // Перерисовываем при открытии
         this.onOpen();
         this.emit('open');
     }

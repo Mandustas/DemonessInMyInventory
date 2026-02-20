@@ -22,6 +22,12 @@ class UIMinimap extends UIComponent {
 
         // Контейнер для рендеринга карты
         this.mapGraphics = null;
+        
+        // Отдельный контейнер для маркеров (обновляется каждый кадр)
+        this.markerGraphics = null;
+
+        // Кэш отрисовки тайлов (не обновляется каждый кадр)
+        this.tilesCacheValid = false;
 
         // Цвета для миникарты
         this.colors = {
@@ -46,11 +52,17 @@ class UIMinimap extends UIComponent {
      * Хук инициализации
      */
     onInit() {
-        // Создаем контейнер для рендеринга карты
+        // Создаем контейнер для рендеринга карты (тайлы - кэш)
         this.mapGraphics = new PIXI.Graphics();
         this.mapGraphics.x = this.padding;
         this.mapGraphics.y = this.padding + 25; // После заголовка
         this.container.addChild(this.mapGraphics);
+
+        // Создаем отдельный контейнер для маркеров (обновляется каждый кадр)
+        this.markerGraphics = new PIXI.Graphics();
+        this.markerGraphics.x = this.padding;
+        this.markerGraphics.y = this.padding + 25;
+        this.container.addChild(this.markerGraphics);
 
         // Рамка карты
         this.mapBorder = new PIXI.Graphics();
@@ -176,6 +188,27 @@ class UIMinimap extends UIComponent {
     renderMinimap() {
         if (!this.mapGraphics || !this.game) return;
 
+        // Получаем позицию игрока в тайлах
+        const playerTilePos = getTileIndex(this.game.character.x, this.game.character.y);
+
+        // Проверяем, нужно ли перерисовывать тайлы (изменилась позиция игрока)
+        if (!this.tilesCacheValid || 
+            Math.abs(playerTilePos.tileX - this.lastPlayerTileX) > 1 || 
+            Math.abs(playerTilePos.tileY - this.lastPlayerTileY) > 1) {
+            this.renderMapTiles(playerTilePos.tileX, playerTilePos.tileY);
+            this.lastPlayerTileX = playerTilePos.tileX;
+            this.lastPlayerTileY = playerTilePos.tileY;
+            this.tilesCacheValid = true;
+        }
+
+        // Обновляем маркеры каждый кадр
+        this.renderMarkers(playerTilePos.tileX, playerTilePos.tileY);
+    }
+
+    /**
+     * Отрисовка тайлов миникарты (кэшируется)
+     */
+    renderMapTiles(playerTileX, playerTileY) {
         const ctx = this.mapGraphics;
         ctx.clear();
 
@@ -184,14 +217,19 @@ class UIMinimap extends UIComponent {
         ctx.drawRect(0, 0, this.mapSize, this.mapSize);
         ctx.endFill();
 
-        // Получаем позицию игрока в тайлах
-        const playerTilePos = getTileIndex(this.game.character.x, this.game.character.y);
-
         // Рисуем активные чанки
-        this.drawActiveChunks(ctx, playerTilePos.tileX, playerTilePos.tileY);
+        this.drawActiveChunks(ctx, playerTileX, playerTileY);
+    }
+
+    /**
+     * Отрисовка маркеров (игрок и враги - обновляется каждый кадр)
+     */
+    renderMarkers(playerTileX, playerTileY) {
+        const ctx = this.markerGraphics;
+        ctx.clear();
 
         // Рисуем врагов
-        this.drawEnemiesIso(ctx, playerTilePos.tileX, playerTilePos.tileY);
+        this.drawEnemiesIso(ctx, playerTileX, playerTileY);
 
         // Рисуем игрока в центре
         ctx.beginFill(this.hexToDecimal(this.colors.player));
@@ -338,6 +376,7 @@ class UIMinimap extends UIComponent {
      * Хук при открытии
      */
     onOpen() {
+        this.tilesCacheValid = false; // Сбрасываем кэш при открытии
         this.renderMinimap();
     }
 

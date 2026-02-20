@@ -1116,6 +1116,14 @@ class Game {
             if (this.uiStatsWindow && this.uiStatsWindow.isOpen) {
                 this.uiStatsWindow.onStatsUpdate();
             }
+            // Обновляем миникарту каждый кадр
+            if (this.uiMinimap && this.uiMinimap.visible) {
+                this.uiMinimap.update();
+            }
+            // Обновляем большую карту при открытии
+            if (this.uiMapWindow && this.uiMapWindow.isOpen) {
+                this.uiMapWindow.update();
+            }
         }
         // =================================
     }
