@@ -1,5 +1,5 @@
 class Enemy {
-    constructor(x, y, type = 'basic') {
+    constructor(x, y, type = 'TANK') {
         this.x = x;
         this.y = y;
         this.type = type;
@@ -30,7 +30,9 @@ class Enemy {
         this.mana = this.maxMana;
         
         this.attackCooldown = 0;
-        this.maxAttackCooldown = GAME_CONFIG.ENEMY.ATTACK_COOLDOWN;
+        // Скорость атаки зависит от типа: ASSASSIN быстрее, TANK медленнее
+        const attackSpeedMultiplier = type === 'ASSASSIN' ? 1.5 : (type === 'TANK' ? 0.7 : 1.0);
+        this.maxAttackCooldown = GAME_CONFIG.ENEMY.ATTACK_COOLDOWN / attackSpeedMultiplier;
 
         // Хитбокс
         this.hitboxRadius = GAME_CONFIG.ENEMY.HITBOX_RADIUS;
@@ -56,7 +58,7 @@ class Enemy {
         if (GAME_CONFIG.ENEMY.TYPES[typeKey]) {
             return GAME_CONFIG.ENEMY.TYPES[typeKey];
         }
-        return GAME_CONFIG.ENEMY.TYPES.BASIC;
+        return GAME_CONFIG.ENEMY.TYPES.TANK; // Тип по умолчанию
     }
     
     /**
@@ -86,19 +88,28 @@ class Enemy {
         );
 
         if (distanceToPlayer <= this.detectionRange) {
-            // Игрок в зоне обнаружения - переходим в режим преследования
-            this.state = 'chasing';
+            // Игрок в зоне обнаружения
             this.target = player;
             this.wanderTimer = 0; // Сбрасываем таймер блуждания
             this.wanderTarget = null;
 
-            // Двигаемся к игроку
-            this.moveToTarget(player, map, chunkSystem, deltaTime);
-
-            // Если в пределах атаки и кулдаун прошел
-            if (distanceToPlayer <= this.attackRange && this.attackCooldown <= 0) {
+            // MAGE не преследует игрока, остаётся на месте и атакует
+            if (this.type === 'MAGE') {
                 this.state = 'attacking';
-                this.attack(player);
+                // Атакуем, если игрок в радиусе атаки и кулдаун прошел
+                if (distanceToPlayer <= this.attackRange && this.attackCooldown <= 0) {
+                    this.attack(player);
+                }
+            } else {
+                // Остальные типы преследуют игрока
+                this.state = 'chasing';
+                this.moveToTarget(player, map, chunkSystem, deltaTime);
+
+                // Если в пределах атаки и кулдаун прошел
+                if (distanceToPlayer <= this.attackRange && this.attackCooldown <= 0) {
+                    this.state = 'attacking';
+                    this.attack(player);
+                }
             }
         } else {
             // Игрок вне зоны обнаружения - имитируем жизнедеятельность
@@ -288,53 +299,102 @@ class Enemy {
      * @param {Character} target - цель для атаки
      */
     attack(target) {
-        if (this.attackCooldown === 0) {
-            // Вызываем эффект атаки
-            if (typeof game !== 'undefined' && game.combatEffects) {
-                game.combatEffects.triggerAttack(this.x, this.y, 'enemy');
+        if (this.attackCooldown <= 0) {
+            // MAGE атакует огненным шаром
+            if (this.attackType === 'magic' && this.type === 'MAGE') {
+                this.shootFireball(target);
             } else {
-                console.warn('Боевая система эффектов не доступна при атаке врагом');
+                // Физическая атака для остальных типов
+                this.performMeleeAttack(target);
             }
-
-            // Получаем урон в зависимости от типа атаки
-            let baseDamage;
-            if (this.attackType === 'magic') {
-                baseDamage = this.getTotalStat('magicDamage');
-            } else {
-                baseDamage = this.getTotalStat('physicalDamage');
-            }
-
-            // Получаем шанс крита врага
-            const criticalChance = Math.min(
-                this.getTotalStat('criticalChance'),
-                GAME_CONFIG.CHARACTER.MAX_CRITICAL_CHANCE
-            );
-
-            // Проверяем критический удар
-            let isCritical = false;
-            let damageMultiplier = 1.0;
-            if (Math.random() <= criticalChance / 100) {
-                isCritical = true;
-                damageMultiplier = GAME_CONFIG.COMBAT.CRITICAL_DAMAGE_MULTIPLIER;
-            }
-
-            // Рассчитываем финальный урон с разбросом
-            const damageVariation = GAME_CONFIG.COMBAT.DAMAGE_VARIATION_MIN +
-                Math.random() * (GAME_CONFIG.COMBAT.DAMAGE_VARIATION_MAX - GAME_CONFIG.COMBAT.DAMAGE_VARIATION_MIN);
-            let damage = Math.floor(baseDamage * damageVariation * damageMultiplier);
-            damage = Math.max(GAME_CONFIG.COMBAT.MIN_DAMAGE, damage);
-
-            // Наносим урон цели
-            const actualDamage = target.takeDamage(damage, isCritical, this.attackType);
-            console.log(`Враг атаковал игрока, нанесено урона: ${actualDamage}`);
 
             // Сбрасываем кулдаун атаки
             this.attackCooldown = this.maxAttackCooldown;
-
-            return actualDamage;
         }
 
         return 0;
+    }
+
+    /**
+     * Атака огненным шаром (для MAGE)
+     * @param {Character} target - цель для атаки
+     */
+    shootFireball(target) {
+        // Вызываем эффект атаки
+        if (typeof game !== 'undefined' && game.combatEffects) {
+            game.combatEffects.triggerAttack(this.x, this.y, 'enemy');
+        }
+
+        // Получаем магический урон
+        const baseDamage = this.getTotalStat('magicDamage');
+
+        // Создаём огненный шар
+        if (typeof game !== 'undefined' && game.projectileManager) {
+            const fireball = new Fireball({
+                x: this.x,
+                y: this.y,
+                targetX: target.x,
+                targetY: target.y,
+                damage: baseDamage,
+                owner: this,
+                speed: GAME_CONFIG.LIGHTING.FIREBALL.SPEED,
+                lightRadius: GAME_CONFIG.LIGHTING.FIREBALL.LIGHT_RADIUS,
+                lightColor: GAME_CONFIG.LIGHTING.FIREBALL.LIGHT_COLOR,
+                lightIntensity: GAME_CONFIG.LIGHTING.FIREBALL.LIGHT_INTENSITY,
+                explosionRadius: GAME_CONFIG.LIGHTING.FIREBALL.EXPLOSION_RADIUS,
+                particleCount: GAME_CONFIG.LIGHTING.FIREBALL.PARTICLE_COUNT
+            });
+            game.projectileManager.addProjectile(fireball);
+        }
+
+        console.log(`MAGE выстрелил огненным шаром в игрока`);
+    }
+
+    /**
+     * Ближняя атака (для TANK и ASSASSIN)
+     * @param {Character} target - цель для атаки
+     */
+    performMeleeAttack(target) {
+        // Вызываем эффект атаки
+        if (typeof game !== 'undefined' && game.combatEffects) {
+            game.combatEffects.triggerAttack(this.x, this.y, 'enemy');
+        } else {
+            console.warn('Боевая система эффектов не доступна при атаке врагом');
+        }
+
+        // Получаем урон в зависимости от типа атаки
+        let baseDamage;
+        if (this.attackType === 'magic') {
+            baseDamage = this.getTotalStat('magicDamage');
+        } else {
+            baseDamage = this.getTotalStat('physicalDamage');
+        }
+
+        // Получаем шанс крита врага
+        const criticalChance = Math.min(
+            this.getTotalStat('criticalChance'),
+            GAME_CONFIG.CHARACTER.MAX_CRITICAL_CHANCE
+        );
+
+        // Проверяем критический удар
+        let isCritical = false;
+        let damageMultiplier = 1.0;
+        if (Math.random() <= criticalChance / 100) {
+            isCritical = true;
+            damageMultiplier = GAME_CONFIG.COMBAT.CRITICAL_DAMAGE_MULTIPLIER;
+        }
+
+        // Рассчитываем финальный урон с разбросом
+        const damageVariation = GAME_CONFIG.COMBAT.DAMAGE_VARIATION_MIN +
+            Math.random() * (GAME_CONFIG.COMBAT.DAMAGE_VARIATION_MAX - GAME_CONFIG.COMBAT.DAMAGE_VARIATION_MIN);
+        let damage = Math.floor(baseDamage * damageVariation * damageMultiplier);
+        damage = Math.max(GAME_CONFIG.COMBAT.MIN_DAMAGE, damage);
+
+        // Наносим урон цели
+        const actualDamage = target.takeDamage(damage, isCritical, this.attackType);
+        console.log(`Враг атаковал игрока, нанесено урона: ${actualDamage}`);
+
+        return actualDamage;
     }
     
     /**

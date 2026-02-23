@@ -93,84 +93,48 @@ const GAME_CONFIG = {
     ENEMY: {
         // Базовые типы врагов с характеристиками
         TYPES: {
-            BASIC: {
+            TANK: {
                 // Основные характеристики
-                strength: 10,
-                dexterity: 10,
-                vitality: 10,
+                strength: 8,
+                dexterity: 4,
+                vitality: 12,
                 energy: 10,
-                intelligence: 10,
+                intelligence: 8,
                 // Боевые параметры
-                speed: 60,
-                detectionRange: 100,
-                attackRange: 30,
+                speed: 35,
+                detectionRange: 80,
+                attackRange: 60,  // > 50 (радиус откидывания)
                 attackType: 'physical', // physical или magic
-                experienceValue: 20
-            },
-            WEAK: {
-                strength: 6,
-                dexterity: 14,
-                vitality: 8,
-                energy: 10,
-                intelligence: 8,
-                speed: 80,
-                detectionRange: 90,
-                attackRange: 25,
-                attackType: 'physical',
-                experienceValue: 15
-            },
-            STRONG: {
-                strength: 16,
-                dexterity: 8,
-                vitality: 14,
-                energy: 10,
-                intelligence: 8,
-                speed: 45,
-                detectionRange: 110,
-                attackRange: 35,
-                attackType: 'physical',
                 experienceValue: 30
             },
-            FAST: {
-                strength: 8,
-                dexterity: 18,
-                vitality: 10,
+            ASSASSIN: {
+                strength: 7,
+                dexterity: 10,
+                vitality: 6,
                 energy: 10,
-                intelligence: 10,
+                intelligence: 8,
                 speed: 100,
-                detectionRange: 130,
-                attackRange: 30,
+                detectionRange: 90,
+                attackRange: 55,  // > 50 (радиус откидывания)
                 attackType: 'physical',
                 experienceValue: 25
             },
-            TANK: {
-                strength: 12,
-                dexterity: 6,
-                vitality: 20,
-                energy: 10,
-                intelligence: 8,
-                speed: 30,
-                detectionRange: 80,
-                attackRange: 40,
-                attackType: 'physical',
-                experienceValue: 35
-            },
             MAGE: {
-                strength: 6,
-                dexterity: 10,
-                vitality: 8,
-                energy: 14,
-                intelligence: 18,
-                speed: 50,
-                detectionRange: 140,
-                attackRange: 50,
+                strength: 5,
+                dexterity: 6,
+                vitality: 7,
+                energy: 10,
+                intelligence: 10,
+                speed: 45,
+                detectionRange: 130,
+                attackRange: 70,  // > 50 (радиус откидывания), дальняя атака
                 attackType: 'magic',
-                experienceValue: 35
+                experienceValue: 30
             }
         },
 
         // Настройки атаки
-        ATTACK_COOLDOWN: 1000, // Миллисекунд между атаками (базовое)
+        ATTACK_COOLDOWN: 1200, // Миллисекунд между атаками (базовое)
 
         // Хитбоксы
         HITBOX_RADIUS: 15,
@@ -199,11 +163,9 @@ const GAME_CONFIG = {
             PLAYER: '#3a4a5a',
             PLAYER_HIGHLIGHT: '#5a6a7a',
             PLAYER_SHADOW: '#1a2a3a',
-            ENEMY: '#5a1a1a',
-            ENEMY_WEAK: '#4a4a4a',
-            ENEMY_STRONG: '#6a2a0a',
-            ENEMY_FAST: '#6a5a0a',
-            ENEMY_TANK: '#2a0505',
+            ENEMY_TANK: '#2a0505',      // Тёмно-красный танк
+            ENEMY_ASSASSIN: '#4a4a2a',  // Тёмно-жёлтый ассасин
+            ENEMY_MAGE: '#2a052a',      // Тёмно-фиолетовый маг
             WALL: '#2d2520',
             WALL_DARK: '#1a1512',
             FLOOR: '#1a1512',

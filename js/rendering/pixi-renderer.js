@@ -38,11 +38,9 @@ class PIXIRenderer {
             player: GAME_CONFIG.RENDERER.COLORS.PLAYER,
             playerHighlight: GAME_CONFIG.RENDERER.COLORS.PLAYER_HIGHLIGHT,
             playerShadow: GAME_CONFIG.RENDERER.COLORS.PLAYER_SHADOW,
-            enemy: GAME_CONFIG.RENDERER.COLORS.ENEMY,
-            enemyWeak: GAME_CONFIG.RENDERER.COLORS.ENEMY_WEAK,
-            enemyStrong: GAME_CONFIG.RENDERER.COLORS.ENEMY_STRONG,
-            enemyFast: GAME_CONFIG.RENDERER.COLORS.ENEMY_FAST,
             enemyTank: GAME_CONFIG.RENDERER.COLORS.ENEMY_TANK,
+            enemyAssassin: GAME_CONFIG.RENDERER.COLORS.ENEMY_ASSASSIN,
+            enemyMage: GAME_CONFIG.RENDERER.COLORS.ENEMY_MAGE,
             wall: GAME_CONFIG.RENDERER.COLORS.WALL,
             wallDark: GAME_CONFIG.RENDERER.COLORS.WALL_DARK,
             floor: GAME_CONFIG.RENDERER.COLORS.FLOOR,
@@ -196,40 +194,26 @@ class PIXIRenderer {
         this.entityTextures.set('player', playerTexture);
 
         // Текстуры для различных типов врагов
-        let basicEnemyTexture = this.createEnemyTexture(entitySize, this.colors.enemy);
-        if (!basicEnemyTexture || !basicEnemyTexture.valid) {
-            console.warn('Не удалось создать текстуру врага (basic), используем резервную');
-            basicEnemyTexture = this.createFallbackTexture(32, 0xff4a4a);
-        }
-        this.entityTextures.set('enemy_basic', basicEnemyTexture);
-
-        let weakEnemyTexture = this.createEnemyTexture(entitySize, this.colors.enemyWeak);
-        if (!weakEnemyTexture || !weakEnemyTexture.valid) {
-            console.warn('Не удалось создать текстуру врага (weak), используем резервную');
-            weakEnemyTexture = this.createFallbackTexture(32, 0xa0a0a0);
-        }
-        this.entityTextures.set('enemy_weak', weakEnemyTexture);
-
-        let strongEnemyTexture = this.createEnemyTexture(entitySize, this.colors.enemyStrong);
-        if (!strongEnemyTexture || !strongEnemyTexture.valid) {
-            console.warn('Не удалось создать текстуру врага (strong), используем резервную');
-            strongEnemyTexture = this.createFallbackTexture(32, 0xff6600);
-        }
-        this.entityTextures.set('enemy_strong', strongEnemyTexture);
-
-        let fastEnemyTexture = this.createEnemyTexture(entitySize, this.colors.enemyFast);
-        if (!fastEnemyTexture || !fastEnemyTexture.valid) {
-            console.warn('Не удалось создать текстуру врага (fast), используем резервную');
-            fastEnemyTexture = this.createFallbackTexture(32, 0xffff00);
-        }
-        this.entityTextures.set('enemy_fast', fastEnemyTexture);
-
         let tankEnemyTexture = this.createEnemyTexture(entitySize, this.colors.enemyTank);
         if (!tankEnemyTexture || !tankEnemyTexture.valid) {
             console.warn('Не удалось создать текстуру врага (tank), используем резервную');
             tankEnemyTexture = this.createFallbackTexture(32, 0x8b0000);
         }
         this.entityTextures.set('enemy_tank', tankEnemyTexture);
+
+        let assassinEnemyTexture = this.createEnemyTexture(entitySize, this.colors.enemyAssassin);
+        if (!assassinEnemyTexture || !assassinEnemyTexture.valid) {
+            console.warn('Не удалось создать текстуру врага (assassin), используем резервную');
+            assassinEnemyTexture = this.createFallbackTexture(32, 0xaaaa00);
+        }
+        this.entityTextures.set('enemy_assassin', assassinEnemyTexture);
+
+        let mageEnemyTexture = this.createEnemyTexture(entitySize, this.colors.enemyMage);
+        if (!mageEnemyTexture || !mageEnemyTexture.valid) {
+            console.warn('Не удалось создать текстуру врага (mage), используем резервную');
+            mageEnemyTexture = this.createFallbackTexture(32, 0xaa00aa);
+        }
+        this.entityTextures.set('enemy_mage', mageEnemyTexture);
     }
 
     /**
@@ -498,14 +482,13 @@ class PIXIRenderer {
             color = this.colors.player;
         } else if (entity.type) {
             switch (entity.type) {
-                case 'weak': color = this.colors.enemyWeak; break;
-                case 'strong': color = this.colors.enemyStrong; break;
-                case 'fast': color = this.colors.enemyFast; break;
-                case 'tank': color = this.colors.enemyTank; break;
-                default: color = this.colors.enemy; break;
+                case 'TANK': color = this.colors.enemyTank; break;
+                case 'ASSASSIN': color = this.colors.enemyAssassin; break;
+                case 'MAGE': color = this.colors.enemyMage; break;
+                default: color = this.colors.enemyTank; break;
             }
         } else {
-            color = this.colors.enemy;
+            color = this.colors.enemyTank;
         }
 
         // Проверяем, есть ли уже анимация для этой сущности
@@ -590,12 +573,11 @@ class PIXIRenderer {
                 if (entity.constructor.name === 'Character') {
                     sprite.texture = this.entityTextures.get('player');
                 } else {
-                    let textureKey = 'enemy_basic';
+                    let textureKey = 'enemy_tank';
                     switch (entity.type) {
-                        case 'weak': textureKey = 'enemy_weak'; break;
-                        case 'strong': textureKey = 'enemy_strong'; break;
-                        case 'fast': textureKey = 'enemy_fast'; break;
-                        case 'tank': textureKey = 'enemy_tank'; break;
+                        case 'TANK': textureKey = 'enemy_tank'; break;
+                        case 'ASSASSIN': textureKey = 'enemy_assassin'; break;
+                        case 'MAGE': textureKey = 'enemy_mage'; break;
                     }
                     sprite.texture = this.entityTextures.get(textureKey);
                 }
@@ -2499,29 +2481,25 @@ class PIXIRenderer {
         let enemySprite = this.entitySprites.get(enemy);
         if (!enemySprite) {
             // Определяем текстуру в зависимости от типа врага
-            let textureKey = 'enemy_basic';
+            let textureKey = 'enemy_tank';
             switch (enemy.type) {
-                case 'weak':
-                    textureKey = 'enemy_weak';
-                    break;
-                case 'strong':
-                    textureKey = 'enemy_strong';
-                    break;
-                case 'fast':
-                    textureKey = 'enemy_fast';
-                    break;
-                case 'tank':
+                case 'TANK':
                     textureKey = 'enemy_tank';
+                    break;
+                case 'ASSASSIN':
+                    textureKey = 'enemy_assassin';
+                    break;
+                case 'MAGE':
+                    textureKey = 'enemy_mage';
                     break;
             }
 
             let texture = this.entityTextures.get(textureKey);
             if (!texture || !texture.valid) {
                 console.warn(`Текстура врага ${textureKey} невалидна, создаем резервную`);
-                const fallbackColor = enemy.type === 'weak' ? 0xa0a0a0 :
-                    enemy.type === 'strong' ? 0xff6600 :
-                        enemy.type === 'fast' ? 0xffff00 :
-                            enemy.type === 'tank' ? 0x8b0000 : 0xff4a4a;
+                const fallbackColor = enemy.type === 'TANK' ? 0x8b0000 :
+                    enemy.type === 'ASSASSIN' ? 0xaaaa00 :
+                        enemy.type === 'MAGE' ? 0xaa00aa : 0xff4a4a;
                 texture = this.createFallbackTexture(32, fallbackColor);
                 this.entityTextures.set(textureKey, texture);
             }

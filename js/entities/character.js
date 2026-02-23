@@ -55,8 +55,21 @@ class Character {
         // Хитбокс
         this.hitboxRadius = GAME_CONFIG.CHARACTER.HITBOX_RADIUS;
 
+        // Скорость атаки и кулдаун
+        this.attackCooldown = 0;
+        this.updateAttackSpeed();
+
         // Обновляем изометрические координаты
         this.updateIsoCoords();
+    }
+
+    /**
+     * Обновление скорости атаки на основе характеристик
+     */
+    updateAttackSpeed() {
+        const attackSpeed = this.getTotalStat('attackSpeed');
+        // attackSpeed - это атак в секунду, значит кулдаун = 1000 / attackSpeed мс
+        this.maxAttackCooldown = 1000 / attackSpeed;
     }
     
     /**
@@ -131,6 +144,11 @@ class Character {
      * @returns {number} - нанесённый урон
      */
     attack(target, damageType = 'physical') {
+        // Проверяем кулдаун атаки
+        if (this.attackCooldown > 0) {
+            return 0; // Атака ещё не готова
+        }
+
         // Вызываем эффект атаки
         if (typeof game !== 'undefined' && game.combatEffects) {
             game.combatEffects.triggerAttack(this.x, this.y, 'player');
@@ -165,6 +183,9 @@ class Character {
             Math.random() * (GAME_CONFIG.COMBAT.DAMAGE_VARIATION_MAX - GAME_CONFIG.COMBAT.DAMAGE_VARIATION_MIN);
         let damage = Math.floor(baseDamage * damageVariation * damageMultiplier);
         damage = Math.max(GAME_CONFIG.COMBAT.MIN_DAMAGE, damage);
+
+        // Устанавливаем кулдаун атаки
+        this.attackCooldown = this.maxAttackCooldown;
 
         // Передаём себя как атакующего для откидывания врага при критическом ударе
         return target.takeDamage(damage, isCritical, damageType, this);
@@ -821,5 +842,22 @@ class Character {
             const regenAmount = this.getManaRegenRate() * (deltaTime / 1000);
             this.restoreMana(regenAmount);
         }
+    }
+
+    /**
+     * Обновление персонажа (кулдауны и т.д.)
+     * @param {number} deltaTime - время с последнего обновления в мс
+     */
+    update(deltaTime = 16.67) {
+        // Уменьшаем кулдаун атаки
+        if (this.attackCooldown > 0) {
+            this.attackCooldown -= deltaTime;
+        }
+
+        // Восстанавливаем ману
+        this.regenerateMana(deltaTime);
+
+        // Обновляем скорость атаки при изменении характеристик
+        this.updateAttackSpeed();
     }
 }

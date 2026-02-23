@@ -495,6 +495,11 @@ class Game {
             if (distance <= attackRange) {
                 const damage = this.character.attack(enemy);
 
+                if (damage === 0) {
+                    // Атака ещё не готова (кулдаун)
+                    continue;
+                }
+
                 // Если враг умер, удаляем его
                 if (!enemy.isAlive()) {
                     // Добавляем опыт за убийство будет обработан в основном цикле
@@ -652,6 +657,11 @@ class Game {
 
             if (distance <= GAME_CONFIG.ATTACK.RANGE) { // В радиусе атаки
                 const damage = this.character.attack(clickedEnemy);
+
+                if (damage === 0) {
+                    // Атака ещё не готова (кулдаун)
+                    return;
+                }
 
                 // Если враг умер, удаляем его
                 if (!clickedEnemy.isAlive()) {
@@ -843,7 +853,7 @@ class Game {
      * @param {string} type - тип врага
      * @returns {Enemy|null} - созданный враг или null, если позиция непроходима
      */
-    createEnemy(x, y, type = 'basic') {
+    createEnemy(x, y, type = 'TANK') {
         // Проверяем, являются ли x и y массивом (когда передаются через spread оператор)
         if (Array.isArray(x)) {
             [x, y] = x;
@@ -888,7 +898,7 @@ class Game {
             const [chunkX, chunkY] = chunkKey.split(',').map(Number);
 
             const [x, y] = this.getRandomPositionInChunk(chunkX, chunkY);
-            const enemyTypes = ['basic', 'weak', 'strong', 'fast', 'tank'];
+            const enemyTypes = ['TANK', 'ASSASSIN', 'MAGE'];
             const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
             this.createEnemy(x, y, randomType);
         }
@@ -918,7 +928,7 @@ class Game {
                 const [chunkX, chunkY] = chunkKey.split(',').map(Number);
 
                 const [x, y] = this.getRandomPositionInChunk(chunkX, chunkY);
-                const enemyTypes = ['basic', 'weak', 'strong', 'fast', 'tank'];
+                const enemyTypes = ['TANK', 'ASSASSIN', 'MAGE'];
                 const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
 
                 // Проверяем, не слишком ли близко к игроку (больше допустимое расстояние)
@@ -1097,9 +1107,9 @@ class Game {
      * @returns {number} - фактор силы (1.0 для базового врага)
      */
     getMonsterStrengthFactor(enemy) {
-        // Базовые характеристики для сравнения
-        const baseHealth = GAME_CONFIG.ENEMY.TYPES.BASIC.vitality * GAME_CONFIG.CHARACTER.VITALITY_HP_MULTIPLIER;
-        const baseDamage = GAME_CONFIG.ENEMY.TYPES.BASIC.strength * GAME_CONFIG.CHARACTER.STRENGTH_PHYSICAL_DAMAGE_MULTIPLIER;
+        // Базовые характеристики для сравнения (используем TANK как базовый)
+        const baseHealth = GAME_CONFIG.ENEMY.TYPES.TANK.vitality * GAME_CONFIG.CHARACTER.VITALITY_HP_MULTIPLIER;
+        const baseDamage = GAME_CONFIG.ENEMY.TYPES.TANK.strength * GAME_CONFIG.CHARACTER.STRENGTH_PHYSICAL_DAMAGE_MULTIPLIER;
 
         // Рассчитываем общий показатель силы врага
         const healthFactor = enemy.maxHealth / baseHealth;
@@ -1214,11 +1224,14 @@ class Game {
             this.periodicTimer = 0;
         }
 
+        // Обновляем персонажа (кулдауны, регенерация)
+        this.character.update(deltaTime);
+
         // Обновляем врагов
         for (let i = this.enemies.length - 1; i >= 0; i--) {
             const enemy = this.enemies[i];
 
-            // Обновляем состояние врага с передачей deltaTime
+            // Обновляем каждого врага
             enemy.update(this.character, null, this.chunkSystem, deltaTime);
 
             // Проверяем коллизии с другими врагами и персонажем

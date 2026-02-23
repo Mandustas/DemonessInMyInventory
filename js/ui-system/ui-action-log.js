@@ -382,11 +382,9 @@ class UIActionLog extends UIComponent {
      */
     getEnemyDisplayName(enemyType) {
         const names = {
-            basic: 'Гоблин',
-            weak: 'Слабый гоблин',
-            strong: 'Сильный гоблин',
-            fast: 'Быстрый гоблин',
-            tank: 'Танк-гоблин'
+            TANK: 'Танк',
+            ASSASSIN: 'Ассасин',
+            MAGE: 'Маг'
         };
         return names[enemyType] || enemyType;
     }

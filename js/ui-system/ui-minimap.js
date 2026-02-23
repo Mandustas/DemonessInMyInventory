@@ -36,10 +36,9 @@ class UIMinimap extends UIComponent {
             floor: '#3a2d1f',
             wall: '#2a1a0a',
             player: '#4a9eff',
-            enemy: '#ff4a4a',
-            enemyStrong: '#ff6600',
-            enemyFast: '#ffff00',
             enemyTank: '#8b0000',
+            enemyAssassin: '#aaaa00',
+            enemyMage: '#aa00aa',
             tree: '#1a3a1a',
             rock: '#3a3a3a',
             water: '#1a3a5a',
@@ -374,13 +373,13 @@ class UIMinimap extends UIComponent {
             }
 
             // Определяем цвет врага
-            let enemyColor = this.colors.enemy;
-            if (enemy.type === 'strong') {
-                enemyColor = this.colors.enemyStrong;
-            } else if (enemy.type === 'fast') {
-                enemyColor = this.colors.enemyFast;
-            } else if (enemy.type === 'tank') {
+            let enemyColor = this.colors.enemyTank;
+            if (enemy.type === 'TANK') {
                 enemyColor = this.colors.enemyTank;
+            } else if (enemy.type === 'ASSASSIN') {
+                enemyColor = this.colors.enemyAssassin;
+            } else if (enemy.type === 'MAGE') {
+                enemyColor = this.colors.enemyMage;
             }
 
             ctx.beginFill(this.hexToDecimal(enemyColor));
