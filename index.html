@@ -120,27 +120,51 @@
     </div>
 
     <script src="node_modules/pixi.js/dist/pixi.min.js"></script>
-    <script src="js/config.js"></script>
-    <script src="js/iso-math.js"></script>
-    <script src="js/character.js"></script>
-    <script src="js/item-drop-sprite.js"></script>
-    <script src="js/pixi-renderer.js"></script>
-    <script src="js/tile-atlas-generator.js"></script>
-    <script src="js/tile-batch-renderer.js"></script>
-    <script src="js/light-source.js"></script>
-    <script src="js/lighting-system.js"></script>
-    <script src="js/torch.js"></script>
-    <script src="js/projectile.js"></script>
-    <script src="js/fireball.js"></script>
-    <script src="js/fog-of-war.js"></script>
     
-    <!-- Новая система UI -->
+    <!-- Ядро игры -->
+    <script src="js/core/config.js"></script>
+    <script src="js/core/iso-math.js"></script>
+    <script src="js/core/save-system.js"></script>
+    
+    <!-- Игровые сущности -->
+    <script src="js/entities/character.js"></script>
+    <script src="js/entities/enemy.js"></script>
+    <script src="js/entities/projectile.js"></script>
+    <script src="js/entities/fireball.js"></script>
+    
+    <!-- Боевая система -->
+    <script src="js/combat/combat-effects.js"></script>
+    <script src="js/combat/enemy-health-bar.js"></script>
+    <script src="js/combat/level-up-effect.js"></script>
+    
+    <!-- Система предметов -->
+    <script src="js/items/items.js"></script>
+    <script src="js/items/item-drops.js"></script>
+    <script src="js/items/item-tooltip.js"></script>
+    
+    <!-- Генерация мира -->
+    <script src="js/world/advanced-dungeon-generator.js"></script>
+    <script src="js/world/world-map.js"></script>
+    <script src="js/world/fog-of-war.js"></script>
+    
+    <!-- Рендеринг -->
+    <script src="js/rendering/pixi-renderer.js"></script>
+    <script src="js/rendering/tile-atlas-generator.js"></script>
+    <script src="js/rendering/tile-batch-renderer.js"></script>
+    <script src="js/rendering/light-source.js"></script>
+    <script src="js/rendering/lighting-system.js"></script>
+    <script src="js/rendering/torch.js"></script>
+    
+    <!-- Утилиты -->
+    <script src="js/utils/item-drop-sprite.js"></script>
+    <script src="js/utils/game-tips.js"></script>
+    
+    <!-- UI система -->
     <script src="js/ui-system/ui-config.js"></script>
     <script src="js/ui-system/ui-component.js"></script>
     <script src="js/ui-system/ui-container.js"></script>
     <script src="js/ui-system/ui-elements.js"></script>
     <script src="js/ui-system/ui-renderer.js"></script>
-    <script src="js/item-tooltip.js"></script>
     <script src="js/ui-system/ui-manager.js"></script>
     <script src="js/ui-system/ui-resource-orb.js"></script>
     <script src="js/ui-system/ui-skill-bar.js"></script>
@@ -157,22 +181,10 @@
     <script src="js/ui-system/ui-death-screen.js"></script>
     <script src="js/ui-system/ui-loading-screen.js"></script>
     
-    <!-- Подсказки для экрана загрузки -->
-    <script src="js/game-tips.js"></script>
-
-    <script src="js/advanced-dungeon-generator.js"></script>
-    <script src="js/world-map.js"></script>
-    <script src="js/items.js"></script>
-    <script src="js/enemy.js"></script>
-    <script src="js/enemy-health-bar.js"></script>
-    <script src="js/save-system.js"></script>
-    <script src="js/level-up-effect.js"></script>
-    <script src="js/item-drops.js"></script>
-    <script src="js/combat-effects.js"></script>
-    
     <!-- Аудио система -->
-    <script src="js/audio-system.js"></script>
+    <script src="js/audio/audio-system.js"></script>
     
-    <script src="js/updated-game.js"></script>
+    <!-- Главный класс игры -->
+    <script src="js/core/game.js"></script>
 </body>
 </html>
