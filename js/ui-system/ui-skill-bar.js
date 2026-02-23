@@ -251,10 +251,10 @@ class UISkillBar extends UIComponent {
     onUpdate(deltaTime) {
         // Обновляем орбы
         if (this.healthOrb) {
-            this.healthOrb.updateDisplay();
+            this.healthOrb.onUpdate(deltaTime);
         }
         if (this.manaOrb) {
-            this.manaOrb.updateDisplay();
+            this.manaOrb.onUpdate(deltaTime);
         }
 
         this.updateExperienceBar();

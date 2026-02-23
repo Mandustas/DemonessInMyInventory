@@ -163,7 +163,7 @@ class UIResourceOrb extends UIComponent {
     /**
      * Отрисовка прогресса
      */
-    renderProgress() {
+    renderProgress(deltaTime = 16.67) {
         if (!this.progressGraphics) return;
 
         const value = this.getValue();
@@ -177,10 +177,10 @@ class UIResourceOrb extends UIComponent {
 
         if (value <= 0) return;
 
-        // Пульсация при низком здоровье
+        // Пульсация при низком здоровье (не зависит от FPS)
         let pulseScale = 1;
         if (isLow) {
-            this.pulsePhase += 0.15;
+            this.pulsePhase += (0.15 / 16.67) * deltaTime;
             pulseScale = 1 + Math.sin(this.pulsePhase) * 0.08;
         }
 
@@ -253,15 +253,16 @@ class UIResourceOrb extends UIComponent {
 
         // Частицы для маны
         if (this.resourceType === 'mana' && value > 0) {
-            this.renderParticles(centerX, centerY);
+            this.renderParticles(centerX, centerY, deltaTime);
         }
     }
 
     /**
      * Отрисовка частиц для маны
      */
-    renderParticles(centerX, centerY) {
-        this.particleTime += 0.05;
+    renderParticles(centerX, centerY, deltaTime = 16.67) {
+        // Обновляем время частиц (не зависит от FPS, в 2 раза медленнее)
+        this.particleTime += (0.5 / 16.67) * deltaTime * 0.5;
 
         // Обновляем частицы
         while (this.particles.length < this.maxParticles) {
@@ -270,7 +271,7 @@ class UIResourceOrb extends UIComponent {
             this.particles.push({
                 angle: angle,
                 distance: distance,
-                speed: 0.02 + Math.random() * 0.03,
+                speed: (0.02 + Math.random() * 0.03) * 0.5,
                 size: 2 + Math.random() * 4,
                 offset: Math.random() * Math.PI * 2
             });
@@ -280,8 +281,8 @@ class UIResourceOrb extends UIComponent {
 
         for (let i = 0; i < this.particles.length; i++) {
             const p = this.particles[i];
-            p.angle += p.speed;
-            
+            p.angle += p.speed * (deltaTime / 16.67);
+
             const pulse = Math.sin(this.particleTime + p.offset) * 0.3 + 0.7;
             const x = centerX + Math.cos(p.angle) * p.distance;
             const y = centerY + Math.sin(p.angle) * p.distance;
@@ -373,12 +374,12 @@ class UIResourceOrb extends UIComponent {
     /**
      * Обновление отображения
      */
-    updateDisplay() {
+    updateDisplay(deltaTime = 16.67) {
         // Обновляем фон
         this.renderBackground();
 
         // Обновляем прогресс
-        this.renderProgress();
+        this.renderProgress(deltaTime);
 
         // Обновляем фон текста
         this.renderTextBackground();
@@ -390,7 +391,7 @@ class UIResourceOrb extends UIComponent {
             // Меняем цвет текста в зависимости от уровня ресурса
             const value = this.getValue();
             let textColor;
-            
+
             if (this.resourceType === 'health') {
                 if (value < 0.15) {
                     textColor = this.colors.health.textCritical;
@@ -402,9 +403,9 @@ class UIResourceOrb extends UIComponent {
             } else {
                 textColor = this.colors.mana.text;
             }
-            
+
             this.textSprite.style.fill = textColor;
-            
+
             // Свечение текста при высоком ресурсе
             const glowIntensity = value > 0.8 ? 0.8 : 0.4;
             this.textSprite.style.dropShadowBlur = 2 + glowIntensity * 2;
@@ -455,7 +456,7 @@ class UIResourceOrb extends UIComponent {
      * Обновление при изменении
      */
     onUpdate(deltaTime) {
-        this.updateDisplay();
+        this.updateDisplay(deltaTime);
     }
 
     /**
