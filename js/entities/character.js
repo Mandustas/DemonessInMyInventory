@@ -16,12 +16,13 @@ class Character {
         this.experience = GAME_CONFIG.CHARACTER.INITIAL_EXPERIENCE;
         this.experienceForNextLevel = GAME_CONFIG.CHARACTER.EXPERIENCE_PER_LEVEL;
 
-        // Статы
-        this.strength = GAME_CONFIG.CHARACTER.INITIAL_STRENGTH;   // Сила влияет на физический урон
-        this.dexterity = GAME_CONFIG.CHARACTER.INITIAL_DEXTERITY;  // Ловкость влияет на шанс попадания и уклонения
-        this.vitality = GAME_CONFIG.CHARACTER.INITIAL_VITALITY;   // Живучесть влияет на здоровье
-        this.energy = GAME_CONFIG.CHARACTER.INITIAL_ENERGY;     // Энергия влияет на магию и восстановление маны
-        
+        // Основные характеристики
+        this.strength = GAME_CONFIG.CHARACTER.INITIAL_STRENGTH;      // Сила - физический урон
+        this.dexterity = GAME_CONFIG.CHARACTER.INITIAL_DEXTERITY;    // Ловкость - скорость атаки и крит
+        this.vitality = GAME_CONFIG.CHARACTER.INITIAL_VITALITY;      // Живучесть - здоровье
+        this.energy = GAME_CONFIG.CHARACTER.INITIAL_ENERGY;          // Энергия - мана и регенерация
+        this.intelligence = GAME_CONFIG.CHARACTER.INITIAL_INTELLIGENCE; // Интеллект - магический урон и мана
+
         // Слоты экипировки
         this.equipment = {
             weapon: null,
@@ -30,30 +31,30 @@ class Character {
             ring: null,
             amulet: null
         };
-        
+
         // Инвентарь
-        this.inventory = Array(GAME_CONFIG.CHARACTER.INVENTORY_SIZE).fill(null); // Слоты инвентаря из конфига
-        
+        this.inventory = Array(GAME_CONFIG.CHARACTER.INVENTORY_SIZE).fill(null);
+
         // Навыки
-        this.skillPoints = 0; // Очков навыков для распределения
+        this.skillPoints = 0;
         this.skills = {
             // Боевые навыки
             'melee_mastery': { level: 0, maxLevel: 5, cost: 1, name: 'Боевое мастерство', description: 'Увеличивает физический урон на 10% за уровень' },
-            'critical_strike': { level: 0, maxLevel: 5, cost: 1, name: 'Критический удар', description: 'Увеличивает шанс критического удара на 5% за уровень' },
+            'critical_strike': { level: 0, maxLevel: 5, cost: 1, name: 'Критический удар', description: 'Увеличивает шанс критического удара на 3% за уровень' },
             'life_leech': { level: 0, maxLevel: 5, cost: 1, name: 'Похищение жизни', description: 'Восстанавливает 2% нанесенного урона как здоровье за уровень' },
-            
-            // Защитные навыки
-            'iron_skin': { level: 0, maxLevel: 5, cost: 1, name: 'Железная кожа', description: 'Увеличивает броню на 10% за уровень' },
-            'dodge': { level: 0, maxLevel: 5, cost: 1, name: 'Уклонение', description: 'Увеличивает шанс уклонения на 3% за уровень' },
-            
+
+            // Магические навыки
+            'magic_mastery': { level: 0, maxLevel: 5, cost: 1, name: 'Мастерство магии', description: 'Увеличивает магический урон на 10% за уровень' },
+            'mana_efficiency': { level: 0, maxLevel: 5, cost: 1, name: 'Эффективность маны', description: 'Снижает стоимость заклинаний на 5% за уровень' },
+
             // Специальные навыки
-            'fireball': { level: 0, maxLevel: 5, cost: 2, name: 'Огненный шар', description: 'Атака магическим огнем, наносит 50% урона + 10 за уровень' },
-            'heal': { level: 0, maxLevel: 5, cost: 2, name: 'Лечение', description: 'Восстанавливает 20% здоровья + 5% за уровень' }
+            'fireball': { level: 0, maxLevel: 5, cost: 2, name: 'Огненный шар', description: 'Атака магическим огнем, наносит урон от интеллекта' },
+            'heal': { level: 0, maxLevel: 5, cost: 2, name: 'Лечение', description: 'Восстанавливает здоровье' }
         };
-        
+
         // Хитбокс
-        this.hitboxRadius = GAME_CONFIG.CHARACTER.HITBOX_RADIUS; // Радиус хитбокса персонажа
-        
+        this.hitboxRadius = GAME_CONFIG.CHARACTER.HITBOX_RADIUS;
+
         // Обновляем изометрические координаты
         this.updateIsoCoords();
     }
@@ -90,14 +91,14 @@ class Character {
     }
     
     /**
-     * Получение урона
+     * Получение урона (физического или магического)
      * @param {number} damage - количество урона
      * @param {boolean} isCritical - является ли урон критическим
+     * @param {string} damageType - тип урона ('physical' или 'magic')
      */
-    takeDamage(damage, isCritical = false) {
-        // Учитываем броню при получении урона
-        const totalArmor = this.getTotalStat('armor');
-        const actualDamage = Math.max(1, damage - totalArmor); // Минимум 1 урон
+    takeDamage(damage, isCritical = false, damageType = 'physical') {
+        // Урон применяется напрямую (без брони)
+        const actualDamage = Math.max(1, Math.floor(damage));
         this.health -= actualDamage;
 
         // Вызываем эффект получения урона
@@ -109,7 +110,6 @@ class Character {
 
         if (this.health <= 0) {
             this.health = 0;
-            // Персонаж умер
             this.onDeath();
         }
 
@@ -125,11 +125,12 @@ class Character {
     }
     
     /**
-     * Нанесение урона цели
+     * Нанесение урона цели (физического или магического)
      * @param {Character|Enemy} target - цель для атаки
+     * @param {string} damageType - тип урона ('physical' или 'magic')
      * @returns {number} - нанесённый урон
      */
-    attack(target) {
+    attack(target, damageType = 'physical') {
         // Вызываем эффект атаки
         if (typeof game !== 'undefined' && game.combatEffects) {
             game.combatEffects.triggerAttack(this.x, this.y, 'player');
@@ -137,46 +138,40 @@ class Character {
             console.warn('Боевая система эффектов не доступна при атаке персонажем');
         }
 
-        // Базовый урон зависит от силы и оружия
-        const baseDamage = this.getTotalStat('damage');
-
-        // Рассчитываем шанс попадания
-        const accuracy = this.getTotalStat('accuracy');
-        const targetDodge = target.getTotalStat ? target.getTotalStat('dodge') : 0; // Учитываем уклонение цели
-        const hitChance = (accuracy - targetDodge) / 100;
-
-        // Проверяем, попали ли
-        if (Math.random() <= hitChance) {
-            // Рассчитываем урон с учетом брони цели
-            const targetArmor = target.getTotalStat ? target.getTotalStat('armor') : 0;
-            let damage = Math.floor(baseDamage * (0.8 + Math.random() * 0.4)); // Разброс урона 80-120%
-
-            // Применяем броню (уменьшаем урон)
-            damage = Math.max(1, damage - targetArmor); // Минимум 1 урон
-
-            // Проверяем на критический удар
-            const criticalChance = this.getTotalStat('critical') / 100;
-            let isCritical = false;
-            if (Math.random() <= criticalChance) {
-                damage = Math.floor(damage * 1.5); // Критический урон 150%
-                console.log('КРИТИЧЕСКИЙ УДАР!');
-                isCritical = true;
-            }
-
-            // Передаём себя как атакующего для откидывания врага при критическом ударе
-            return target.takeDamage(damage, isCritical, this);
+        // Получаем урон в зависимости от типа
+        let baseDamage;
+        if (damageType === 'magic') {
+            baseDamage = this.getTotalStat('magicDamage');
         } else {
-            // Промах - вызываем эффект уворота для цели
-            if (typeof game !== 'undefined' && game.combatEffects) {
-                game.combatEffects.triggerDodge(target.x, target.y);
-            }
-            console.log('Промах!');
-            return 0;
+            baseDamage = this.getTotalStat('physicalDamage');
         }
+
+        // Получаем шанс крита
+        const criticalChance = Math.min(
+            this.getTotalStat('criticalChance'),
+            GAME_CONFIG.CHARACTER.MAX_CRITICAL_CHANCE
+        );
+
+        // Проверяем критический удар
+        let isCritical = false;
+        let damageMultiplier = 1.0;
+        if (Math.random() <= criticalChance / 100) {
+            isCritical = true;
+            damageMultiplier = GAME_CONFIG.COMBAT.CRITICAL_DAMAGE_MULTIPLIER;
+        }
+
+        // Рассчитываем финальный урон с разбросом
+        const damageVariation = GAME_CONFIG.COMBAT.DAMAGE_VARIATION_MIN +
+            Math.random() * (GAME_CONFIG.COMBAT.DAMAGE_VARIATION_MAX - GAME_CONFIG.COMBAT.DAMAGE_VARIATION_MIN);
+        let damage = Math.floor(baseDamage * damageVariation * damageMultiplier);
+        damage = Math.max(GAME_CONFIG.COMBAT.MIN_DAMAGE, damage);
+
+        // Передаём себя как атакующего для откидывания врага при критическом ударе
+        return target.takeDamage(damage, isCritical, damageType, this);
     }
     
     /**
-     * Получение общего значения характеристики с учётом экипировки
+     * Получение общего значения характеристики с учётом экипировки и навыков
      * @param {string} statName - название характеристики
      * @returns {number} - общее значение характеристики
      */
@@ -184,43 +179,98 @@ class Character {
         let baseValue = 0;
 
         switch(statName) {
+            // === ПЕРВИЧНЫЕ ХАРАКТЕРИСТИКИ ===
+            case 'strength':
+            case 'dexterity':
+            case 'vitality':
+            case 'energy':
+            case 'intelligence':
+                baseValue = this[statName] || 0;
+                break;
+
+            // === ЗДОРОВЬЕ И МАНА ===
             case 'health':
-                baseValue = this.vitality * GAME_CONFIG.CHARACTER.VITALITY_HP_MULTIPLIER; // Каждая единица живучести даёт 10 хп
+            case 'maxHealth':
+                baseValue = this.vitality * GAME_CONFIG.CHARACTER.VITALITY_HP_MULTIPLIER;
                 break;
+
             case 'mana':
-                baseValue = this.energy * GAME_CONFIG.CHARACTER.ENERGY_MANA_MULTIPLIER; // Каждая единица энергии даёт 5 маны
+            case 'maxMana':
+                baseValue = (this.energy * GAME_CONFIG.CHARACTER.ENERGY_MANA_MULTIPLIER) +
+                           (this.intelligence * GAME_CONFIG.CHARACTER.INTELLIGENCE_MANA_MULTIPLIER);
                 break;
+
+            // === УРОН ===
+            case 'physicalDamage':
+                // Физический урон от силы + бонусы от экипировки
+                baseValue = this.strength * GAME_CONFIG.CHARACTER.STRENGTH_PHYSICAL_DAMAGE_MULTIPLIER;
+                break;
+
+            case 'magicDamage':
+                // Магический урон от интеллекта + бонусы от экипировки
+                baseValue = this.intelligence * GAME_CONFIG.CHARACTER.INTELLIGENCE_MAGIC_DAMAGE_MULTIPLIER;
+                break;
+
+            // === СКОРОСТЬ АТАКИ ===
+            case 'attackSpeed':
+                // Базовая скорость + бонус от ловкости
+                baseValue = GAME_CONFIG.CHARACTER.BASE_ATTACK_SPEED +
+                           (this.dexterity * GAME_CONFIG.CHARACTER.DEXTERITY_ATTACK_SPEED_MULTIPLIER);
+                break;
+
+            // === ШАНС КРИТА ===
+            case 'criticalChance':
+                // Шанс крита от ловкости
+                baseValue = this.dexterity * GAME_CONFIG.CHARACTER.DEXTERITY_CRITICAL_MULTIPLIER;
+                break;
+
+            // === ВОССТАНОВЛЕНИЕ МАНЫ ===
+            case 'manaRegen':
+                // Регенерация маны в секунду
+                baseValue = GAME_CONFIG.CHARACTER.BASE_MANA_REGEN +
+                           (this.energy * GAME_CONFIG.CHARACTER.ENERGY_MANA_REGEN_MULTIPLIER) +
+                           (this.intelligence * GAME_CONFIG.CHARACTER.INTELLIGENCE_MANA_REGEN_MULTIPLIER);
+                break;
+
+            // === УСТАРЕВШИЕ (для совместимости) ===
             case 'damage':
-                baseValue = this.strength * GAME_CONFIG.CHARACTER.STRENGTH_DAMAGE_MULTIPLIER; // Каждая единица силы даёт 1.5 урона
+                // Возвращаем физический урон для обратной совместимости
+                baseValue = this.strength * GAME_CONFIG.CHARACTER.STRENGTH_PHYSICAL_DAMAGE_MULTIPLIER;
                 break;
+
             case 'armor':
-                baseValue = this.vitality * GAME_CONFIG.CHARACTER.VITALITY_ARMOR_MULTIPLIER; // Каждая единица живучести даёт 0.5 брони
-                break;
             case 'accuracy':
-                baseValue = GAME_CONFIG.CHARACTER.DEXTERITY_ACCURACY_BASE + this.dexterity * GAME_CONFIG.CHARACTER.DEXTERITY_ACCURACY_MULTIPLIER; // Базовый шанс попадания 80% + ловкость
-                break;
             case 'dodge':
-                baseValue = this.dexterity * GAME_CONFIG.CHARACTER.DEXTERITY_DODGE_MULTIPLIER; // Каждая единица ловкости даёт 0.3% уклонения
+                // Убраны из игры
+                baseValue = 0;
                 break;
-            case 'critical':
-                baseValue = this.dexterity * GAME_CONFIG.CHARACTER.DEXTERITY_CRITICAL_MULTIPLIER; // Каждая единица ловкости даёт 0.2% к крит. шансу
-                break;
+
             default:
                 baseValue = this[statName] || 0;
         }
-        
+
         // Добавляем бонусы от экипировки
         for (const slot in this.equipment) {
             const item = this.equipment[slot];
-            if (item && item.stats && item.stats[statName]) {
-                baseValue += item.stats[statName];
+            if (item && item.stats) {
+                // Проверяем прямой стат
+                if (item.stats[statName]) {
+                    baseValue += item.stats[statName];
+                }
+                // Проверяем альтернативные названия статов
+                if (statName === 'physicalDamage' && item.stats.damage) {
+                    baseValue += item.stats.damage;
+                }
+                if (statName === 'criticalChance' && item.stats.critical) {
+                    baseValue += item.stats.critical;
+                }
             }
         }
-        
+
         // Добавляем бонусы от навыков
         baseValue += this.getSkillsBonusForStat(statName);
-        
-        return Math.floor(baseValue);
+
+        return Math.floor(baseValue * 10) / 10; // Округляем до 1 знака
     }
     
     /**
@@ -250,22 +300,20 @@ class Character {
     levelUp() {
         this.level++;
         this.experience -= this.experienceForNextLevel;
-        this.experienceForNextLevel = Math.floor(this.experienceForNextLevel * GAME_CONFIG.CHARACTER.EXPERIENCE_MULTIPLIER); // Увеличиваем требуемый опыт
+        this.experienceForNextLevel = Math.floor(this.experienceForNextLevel * GAME_CONFIG.CHARACTER.EXPERIENCE_MULTIPLIER);
 
-        // Увеличиваем характеристики
-        this.maxHealth += GAME_CONFIG.CHARACTER.LEVEL_UP_HEALTH_INCREASE;
+        // Восстанавливаем здоровье и ману при повышении уровня
+        this.maxHealth = this.getTotalStat('maxHealth');
         this.health = this.maxHealth;
-        this.maxMana += GAME_CONFIG.CHARACTER.LEVEL_UP_MANA_INCREASE; // Увеличиваем максимальную ману
-        this.mana = this.maxMana; // Восстанавливаем ману при повышении уровня
-        this.strength += GAME_CONFIG.CHARACTER.LEVEL_UP_STAT_INCREASE;
-        this.dexterity += GAME_CONFIG.CHARACTER.LEVEL_UP_STAT_INCREASE;
-        this.vitality += GAME_CONFIG.CHARACTER.LEVEL_UP_STAT_INCREASE;
-        this.energy += GAME_CONFIG.CHARACTER.LEVEL_UP_ENERGY_INCREASE;
+        this.maxMana = this.getTotalStat('maxMana');
+        this.mana = this.maxMana;
+
+        // Характеристики НЕ увеличиваются от уровня (только от предметов)
 
         // Добавляем очко навыков за каждый уровень
         this.gainSkillPoint();
 
-        // Обновляем UI, если есть доступ к игре
+        // Обновляем UI
         if (window.game && window.game.uiStatsWindow) {
             window.game.uiStatsWindow.onStatsUpdate();
         }
@@ -273,7 +321,7 @@ class Character {
             window.game.uiSkillBar.update();
         }
 
-        // Уведомляем об изменении уровня (эффект будет вызван в game.js)
+        // Уведомляем об изменении уровня
         this.onLevelChanged && this.onLevelChanged(this.level, this.x, this.y);
     }
     
@@ -311,21 +359,78 @@ class Character {
      * Возрождение персонажа
      */
     respawn() {
-        // Восстанавливаем здоровье
+        // Пересчитываем максимальные характеристики от текущих статов
+        this.maxHealth = this.getTotalStat('maxHealth');
+        this.maxMana = this.getTotalStat('maxMana');
+        
+        // Восстанавливаем здоровье и ману
         this.health = this.maxHealth;
         this.mana = this.maxMana;
-        
-        // Телепортируем в безопасное место (центр карты)
-        this.x = 0;
-        this.y = 0;
+
+        // Находим безопасное место для возрождения
+        const safeSpawn = this.findSafeSpawnLocation();
+        this.x = safeSpawn.x;
+        this.y = safeSpawn.y;
         this.updateIsoCoords();
-        
-        console.log('Персонаж возрожден!');
-        
+
+        console.log('Персонаж возрожден!', this.x, this.y);
+
         // Если есть игра, обновляем позицию
         if (window.game) {
-            window.game.character.setPosition(0, 0);
+            window.game.character.setPosition(this.x, this.y);
         }
+    }
+
+    /**
+     * Поиск безопасного места для возрождения
+     * @returns {{x: number, y: number}} - безопасные координаты
+     */
+    findSafeSpawnLocation() {
+        // Пробуем найти безопасное место вокруг центра карты
+        const centerX = 0;
+        const centerY = 0;
+        const maxRadius = 200;
+        const step = 32;
+
+        // Проверяем точки по спирали от центра
+        for (let radius = 0; radius < maxRadius; radius += step) {
+            for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+
+                // Проверяем, проходимо ли это место
+                if (this.isLocationPassable(x, y)) {
+                    return { x: Math.floor(x), y: Math.floor(y) };
+                }
+            }
+        }
+
+        // Если не нашли безопасное место, возвращаем центр (на всякий случай)
+        return { x: 0, y: 0 };
+    }
+
+    /**
+     * Проверка, проходимо ли место
+     * @param {number} x - координата X
+     * @param {number} y - координата Y
+     * @returns {boolean} - проходимо ли место
+     */
+    isLocationPassable(x, y) {
+        // Если есть доступ к системе чанков, проверяем через неё
+        if (window.game && window.game.chunkSystem) {
+            // Преобразуем координаты в координаты тайлов
+            const tileX = Math.floor(x / 64);
+            const tileY = Math.floor(y / 32);
+            return window.game.chunkSystem.isPassable(tileX, tileY);
+        }
+
+        // Если есть доступ к worldMap, проверяем через неё
+        if (window.game && window.game.worldMap) {
+            return window.game.worldMap.isPassable(x, y);
+        }
+
+        // Если ничего нет, считаем место проходимым
+        return true;
     }
     
     /**
@@ -499,36 +604,43 @@ class Character {
      */
     getSkillBonus(skillName) {
         const skill = this.skills[skillName];
-        
+
         if (!skill || skill.level === 0) {
             return 0;
         }
-        
+
         // Расчет бонуса в зависимости от типа навыка
         switch(skillName) {
             case 'melee_mastery':
-                return this.getTotalStat('damage') * GAME_CONFIG.CHARACTER.MELEE_MASTERY_BONUS * skill.level; // +10% урона за уровень
+                // +10% физического урона за уровень
+                return this.getTotalStat('physicalDamage') * GAME_CONFIG.CHARACTER.MELEE_MASTERY_BONUS * skill.level;
 
             case 'critical_strike':
-                return skill.level * GAME_CONFIG.CHARACTER.CRITICAL_STRIKE_BONUS; // +5% шанса крита за уровень
+                // +3% шанса крита за уровень
+                return skill.level * GAME_CONFIG.CHARACTER.CRITICAL_STRIKE_BONUS;
 
             case 'life_leech':
-                return skill.level * GAME_CONFIG.CHARACTER.LIFE_LEECH_BONUS; // 2% похищения за уровень
+                // 2% похищения жизни за уровень
+                return skill.level * GAME_CONFIG.CHARACTER.LIFE_LEECH_BONUS;
 
-            case 'iron_skin':
-                return this.getTotalStat('armor') * GAME_CONFIG.CHARACTER.IRON_SKIN_BONUS * skill.level; // +10% брони за уровень
+            case 'magic_mastery':
+                // +10% магического урона за уровень
+                return this.getTotalStat('magicDamage') * GAME_CONFIG.CHARACTER.MAGIC_MASTERY_BONUS * skill.level;
 
-            case 'dodge':
-                return skill.level * GAME_CONFIG.CHARACTER.DODGE_BONUS; // +3% уклонения за уровень
+            case 'mana_efficiency':
+                // 5% снижение стоимости маны за уровень
+                return skill.level * GAME_CONFIG.CHARACTER.MANA_EFFICIENCY_BONUS;
 
             case 'fireball':
-                return GAME_CONFIG.CHARACTER.FIREBALL_DAMAGE_BONUS * skill.level; // +10 урона за уровень
+                // +10 магического урона за уровень
+                return GAME_CONFIG.CHARACTER.FIREBALL_DAMAGE_BONUS * skill.level;
 
             case 'heal':
-                return this.maxHealth * GAME_CONFIG.CHARACTER.HEAL_PERCENT_BONUS * skill.level; // +5% хила за уровень
+                // +5% лечения за уровень
+                return this.maxHealth * GAME_CONFIG.CHARACTER.HEAL_PERCENT_BONUS * skill.level;
 
             default:
-                return skill.level; // По умолчанию просто уровень
+                return skill.level;
         }
     }
     
@@ -539,46 +651,34 @@ class Character {
      */
     getSkillsBonusForStat(statName) {
         let totalBonus = 0;
-        
-        // Для каждой характеристики проверяем, какие навыки дают бонус
+
         for (const skillName in this.skills) {
             const skill = this.skills[skillName];
             if (skill.level > 0) {
-                // Определяем, влияет ли навык на данную характеристику
                 switch(statName) {
-                    case 'damage':
+                    case 'physicalDamage':
                         if (skillName === 'melee_mastery') {
-                            // Для избежания рекурсии, используем базовое значение
-                            const baseDamage = this.strength * 1.5;
-                            totalBonus += baseDamage * 0.1 * skill.level;
+                            const baseDamage = this.strength * GAME_CONFIG.CHARACTER.STRENGTH_PHYSICAL_DAMAGE_MULTIPLIER;
+                            totalBonus += baseDamage * GAME_CONFIG.CHARACTER.MELEE_MASTERY_BONUS * skill.level;
                         }
                         break;
-                    case 'armor':
-                        if (skillName === 'iron_skin') {
-                            // Для избежания рекурсии, используем базовое значение
-                            const baseArmor = this.vitality * 0.5;
-                            totalBonus += baseArmor * 0.1 * skill.level;
+
+                    case 'magicDamage':
+                        if (skillName === 'magic_mastery') {
+                            const baseMagicDamage = this.intelligence * GAME_CONFIG.CHARACTER.INTELLIGENCE_MAGIC_DAMAGE_MULTIPLIER;
+                            totalBonus += baseMagicDamage * GAME_CONFIG.CHARACTER.MAGIC_MASTERY_BONUS * skill.level;
                         }
                         break;
-                    case 'critical':
+
+                    case 'criticalChance':
                         if (skillName === 'critical_strike') {
-                            totalBonus += skill.level * 5;
-                        }
-                        break;
-                    case 'dodge':
-                        if (skillName === 'dodge') {
-                            totalBonus += skill.level * 3;
-                        }
-                        break;
-                    case 'health':
-                        if (skillName === 'heal') {
-                            totalBonus += this.maxHealth * 0.05 * skill.level;
+                            totalBonus += skill.level * GAME_CONFIG.CHARACTER.CRITICAL_STRIKE_BONUS;
                         }
                         break;
                 }
             }
         }
-        
+
         return totalBonus;
     }
     
@@ -587,45 +687,50 @@ class Character {
      * @param {string} skillName - название навыка
      * @param {Character|Enemy} [target] - цель (если требуется)
      * @param {Object} [options] - дополнительные опции
-     * @returns {number} - результат применения навыка (урон, лечение и т.д.)
+     * @returns {number} - результат применения навыка
      */
     useSkill(skillName, target, options = {}) {
         const skill = this.skills[skillName];
-        
+
         if (!skill || skill.level === 0) {
             console.error(`Навык ${skillName} не изучен`);
             return 0;
         }
-        
-        // Определяем стоимость маны для навыка
-        const manaCost = this.getSkillManaCost(skillName);
-        
+
+        // Определяем стоимость маны для навыка (с учетом эффективности маны)
+        let manaCost = this.getSkillManaCost(skillName);
+        const manaEfficiencyBonus = this.getSkillBonus('mana_efficiency');
+        manaCost = manaCost * (1 - manaEfficiencyBonus);
+        manaCost = Math.max(1, Math.floor(manaCost));
+
         // Проверяем, достаточно ли маны
         if (!this.consumeMana(manaCost)) {
             console.log(`Недостаточно маны для использования навыка ${skill.name}`);
             return 0;
         }
-        
+
         switch(skillName) {
             case 'fireball':
                 if (!target) return 0;
-                
-                // Огненный шар: 50% от базового урона + 10 за уровень
-                const baseDamage = this.getTotalStat('damage') * 0.5;
-                const fireDamage = baseDamage + this.getSkillBonus(skillName);
-                const actualDamage = target.takeDamage(fireDamage);
-                
-                console.log(`Использован Огненный шар, нанесено урона: ${actualDamage}`);
+
+                // Огненный шар: магический урон от интеллекта + бонус навыка
+                const baseMagicDamage = this.getTotalStat('magicDamage');
+                const magicMasteryBonus = this.getSkillBonus('magic_mastery');
+                const fireDamage = baseMagicDamage + magicMasteryBonus + this.getSkillBonus(skillName);
+                const actualDamage = target.takeDamage(fireDamage, false, 'magic');
+
+                console.log(`Использован Огненный шар, нанесено магического урона: ${actualDamage}`);
                 return actualDamage;
-                
+
             case 'heal':
-                // Лечение: 20% от макс. здоровья + 5% за уровень
-                const healAmount = (this.maxHealth * 0.2) + this.getSkillBonus(skillName);
+                // Лечение: процент от макс. здоровья + бонус от навыка
+                const healPercent = 0.2 + this.getSkillBonus('heal') / this.maxHealth;
+                const healAmount = this.maxHealth * healPercent;
                 this.heal(healAmount);
-                
-                console.log(`Использовано Лечение, восстановлено здоровья: ${healAmount}`);
+
+                console.log(`Использовано Лечение, восстановлено здоровья: ${healAmount.toFixed(1)}`);
                 return healAmount;
-                
+
             default:
                 console.log(`Навык ${skillName} не может быть использован напрямую`);
                 return 0;
@@ -701,8 +806,8 @@ class Character {
      * @returns {number} - значение восстановления маны
      */
     getManaRegenRate() {
-        // Базовое восстановление + бонус от энергии (в секунду)
-        return GAME_CONFIG.CHARACTER.BASE_MANA_REGEN + this.getTotalStat('energy') * GAME_CONFIG.CHARACTER.ENERGY_MANA_REGEN_MULTIPLIER;
+        // Базовое восстановление + бонусы от энергии и интеллекта
+        return this.getTotalStat('manaRegen');
     }
 
     /**

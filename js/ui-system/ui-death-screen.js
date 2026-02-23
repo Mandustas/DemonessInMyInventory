@@ -257,11 +257,12 @@ class UIDeathScreen extends UIComponent {
      */
     createButtons() {
         const buttonConfig = [
+            { key: 'respawn', text: 'ВОЗРОДИТЬСЯ', action: 'respawn' },
             { key: 'mainMenu', text: 'В ГЛАВНОЕ МЕНЮ', action: 'mainMenu' },
             { key: 'loadSave', text: 'ЗАГРУЗИТЬ СОХРАНЕНИЕ', action: 'loadSave', requiresSave: true }
         ];
 
-        const startY = this.padding + 160;
+        const startY = this.padding + 140;
         const buttonWidth = this.menuWidth - this.padding * 2;
 
         buttonConfig.forEach((config, index) => {
@@ -398,6 +399,29 @@ class UIDeathScreen extends UIComponent {
      */
     handleAction(action) {
         switch (action) {
+            case 'respawn':
+                if (this.game && this.game.character) {
+                    // Возрождаем персонажа
+                    this.game.character.respawn();
+                    
+                    // Скрываем экран смерти
+                    this.close();
+                    
+                    // Возвращаем игру в нормальное состояние
+                    this.game.gameState = 'playing';
+                    
+                    // Восстанавливаем видимость UI элементов
+                    if (this.game.uiSkillBar) this.game.uiSkillBar.visible = true;
+                    if (this.game.uiMinimap) this.game.uiMinimap.visible = true;
+                    if (this.game.uiPanelButtons) this.game.uiPanelButtons.visible = true;
+                    if (this.game.uiActionLog) this.game.uiActionLog.visible = true;
+                    
+                    // Воспроизводим музыку игры
+                    if (this.game.audioSystem) {
+                        this.game.audioSystem.playMusic('openworld', true);
+                    }
+                }
+                break;
             case 'mainMenu':
                 if (this.game) {
                     // Возрождаем персонажа перед выходом в меню

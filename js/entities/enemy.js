@@ -6,56 +6,57 @@ class Enemy {
         this.width = 30;
         this.height = 30;
 
-        // Уникальные характеристики в зависимости от типа
-        this.stats = this.generateStatsByType(type);
-
-        this.health = this.stats.maxHealth;
-        this.maxHealth = this.stats.maxHealth;
-        this.speed = this.stats.speed;
-        this.damage = this.stats.damage;
-        this.detectionRange = this.stats.detectionRange;
-        this.attackRange = this.stats.attackRange;
+        // Генерируем характеристики по типу врага
+        const typeStats = this.getTypeStats(type);
+        
+        // Основные характеристики
+        this.strength = typeStats.strength || 10;
+        this.dexterity = typeStats.dexterity || 10;
+        this.vitality = typeStats.vitality || 10;
+        this.energy = typeStats.energy || 10;
+        this.intelligence = typeStats.intelligence || 10;
+        
+        // Боевые параметры
+        this.speed = typeStats.speed || 60;
+        this.detectionRange = typeStats.detectionRange || 100;
+        this.attackRange = typeStats.attackRange || 30;
+        this.attackType = typeStats.attackType || 'physical';
+        this.experienceValue = typeStats.experienceValue || 20;
+        
+        // Производные характеристики
+        this.maxHealth = this.getTotalStat('maxHealth');
+        this.health = this.maxHealth;
+        this.maxMana = this.getTotalStat('maxMana');
+        this.mana = this.maxMana;
+        
         this.attackCooldown = 0;
-        this.maxAttackCooldown = GAME_CONFIG.ENEMY.ATTACK_COOLDOWN; // Тиков между атаками
+        this.maxAttackCooldown = GAME_CONFIG.ENEMY.ATTACK_COOLDOWN;
 
         // Хитбокс
-        this.hitboxRadius = GAME_CONFIG.ENEMY.HITBOX_RADIUS; // Радиус хитбокса врага
-        
+        this.hitboxRadius = GAME_CONFIG.ENEMY.HITBOX_RADIUS;
+
         // Состояние врага
-        this.state = 'idle'; // idle, chasing, attacking, wandering
-        this.target = null; // цель для преследования
-        
-        // Параметры для имитации жизнедеятельности (блуждание)
+        this.state = 'idle';
+        this.target = null;
+
+        // Параметры блуждания
         this.wanderTarget = null;
         this.wanderTimer = 0;
-        this.wanderInterval = GAME_CONFIG.ENEMY.WANDER_INTERVAL_MIN + Math.random() * (GAME_CONFIG.ENEMY.WANDER_INTERVAL_MAX - GAME_CONFIG.ENEMY.WANDER_INTERVAL_MIN); // 2-5 секунд блуждания
+        this.wanderInterval = GAME_CONFIG.ENEMY.WANDER_INTERVAL_MIN + Math.random() * (GAME_CONFIG.ENEMY.WANDER_INTERVAL_MAX - GAME_CONFIG.ENEMY.WANDER_INTERVAL_MIN);
         this.idleAnimTimer = 0;
         this.lastX = x;
         this.lastY = y;
     }
-    
+
     /**
-     * Генерация характеристик в зависимости от типа врага
-     * @param {string} type - тип врага
-     * @returns {Object} - объект с характеристиками
+     * Получение характеристик типа врага
      */
-    generateStatsByType(type) {
-        switch(type) {
-            case 'weak':
-                return GAME_CONFIG.ENEMY.TYPES.WEAK;
-
-            case 'strong':
-                return GAME_CONFIG.ENEMY.TYPES.STRONG;
-
-            case 'fast':
-                return GAME_CONFIG.ENEMY.TYPES.FAST;
-
-            case 'tank':
-                return GAME_CONFIG.ENEMY.TYPES.TANK;
-
-            default: // basic
-                return GAME_CONFIG.ENEMY.TYPES.BASIC;
+    getTypeStats(type) {
+        const typeKey = type.toUpperCase();
+        if (GAME_CONFIG.ENEMY.TYPES[typeKey]) {
+            return GAME_CONFIG.ENEMY.TYPES[typeKey];
         }
+        return GAME_CONFIG.ENEMY.TYPES.BASIC;
     }
     
     /**
@@ -295,43 +296,42 @@ class Enemy {
                 console.warn('Боевая система эффектов не доступна при атаке врагом');
             }
 
-            // Рассчитываем шанс попадания
-            const accuracy = this.getTotalStat('accuracy');
-            const targetDodge = target.getTotalStat ? target.getTotalStat('dodge') : 0;
-            const hitChance = (accuracy - targetDodge) / 100;
-
-            if (Math.random() <= hitChance) {
-                // Рассчитываем урон с учетом брони цели
-                const targetArmor = target.getTotalStat ? target.getTotalStat('armor') : 0;
-                let damage = Math.floor(this.damage * (0.8 + Math.random() * 0.4)); // Разброс урона 80-120%
-
-                // Применяем броню (уменьшаем урон)
-                damage = Math.max(1, damage - targetArmor); // Минимум 1 урон
-
-                // Проверяем на критический удар
-                const criticalChance = this.getTotalStat('critical') / 100;
-                let isCritical = false;
-                if (Math.random() <= criticalChance) {
-                    damage = Math.floor(damage * 1.5); // Критический урон 150%
-                    console.log('Враг нанес КРИТИЧЕСКИЙ УДАР!');
-                    isCritical = true;
-                }
-
-                const actualDamage = target.takeDamage(damage, isCritical);
-                console.log(`Враг атаковал игрока, нанесено урона: ${actualDamage}`);
-
-                // Сбрасываем кулдаун атаки
-                this.attackCooldown = this.maxAttackCooldown;
-
-                return actualDamage;
+            // Получаем урон в зависимости от типа атаки
+            let baseDamage;
+            if (this.attackType === 'magic') {
+                baseDamage = this.getTotalStat('magicDamage');
             } else {
-                // Промах - вызываем эффект уворота для цели
-                if (typeof game !== 'undefined' && game.combatEffects) {
-                    game.combatEffects.triggerDodge(target.x, target.y);
-                }
-                console.log('Враг промахнулся!');
-                return 0;
+                baseDamage = this.getTotalStat('physicalDamage');
             }
+
+            // Получаем шанс крита врага
+            const criticalChance = Math.min(
+                this.getTotalStat('criticalChance'),
+                GAME_CONFIG.CHARACTER.MAX_CRITICAL_CHANCE
+            );
+
+            // Проверяем критический удар
+            let isCritical = false;
+            let damageMultiplier = 1.0;
+            if (Math.random() <= criticalChance / 100) {
+                isCritical = true;
+                damageMultiplier = GAME_CONFIG.COMBAT.CRITICAL_DAMAGE_MULTIPLIER;
+            }
+
+            // Рассчитываем финальный урон с разбросом
+            const damageVariation = GAME_CONFIG.COMBAT.DAMAGE_VARIATION_MIN +
+                Math.random() * (GAME_CONFIG.COMBAT.DAMAGE_VARIATION_MAX - GAME_CONFIG.COMBAT.DAMAGE_VARIATION_MIN);
+            let damage = Math.floor(baseDamage * damageVariation * damageMultiplier);
+            damage = Math.max(GAME_CONFIG.COMBAT.MIN_DAMAGE, damage);
+
+            // Наносим урон цели
+            const actualDamage = target.takeDamage(damage, isCritical, this.attackType);
+            console.log(`Враг атаковал игрока, нанесено урона: ${actualDamage}`);
+
+            // Сбрасываем кулдаун атаки
+            this.attackCooldown = this.maxAttackCooldown;
+
+            return actualDamage;
         }
 
         return 0;
@@ -341,13 +341,13 @@ class Enemy {
      * Получение урона
      * @param {number} damage - количество урона
      * @param {boolean} isCritical - является ли урон критическим
-     * @param {Object} attacker - атакующий (для определения направления откидывания)
+     * @param {string} damageType - тип урона ('physical' или 'magic')
+     * @param {Object} attacker - атакующий
      * @returns {number} - фактический полученный урон
      */
-    takeDamage(damage, isCritical = false, attacker = null) {
-        // Учитываем броню врага при получении урона
-        const totalArmor = this.getTotalStat('armor');
-        const actualDamage = Math.max(1, damage - totalArmor); // Минимум 1 урон
+    takeDamage(damage, isCritical = false, damageType = 'physical', attacker = null) {
+        // Урон применяется напрямую (без брони)
+        const actualDamage = Math.max(1, Math.floor(damage));
         this.health -= actualDamage;
 
         // Вызываем эффект получения урона
@@ -357,19 +357,18 @@ class Enemy {
             console.warn('Боевая система эффектов не доступна при получении урона врагом');
         }
 
-        // Обновляем полоску здоровья (показываем при получении урона)
+        // Обновляем полоску здоровья
         if (typeof game !== 'undefined' && game.renderer && game.renderer.updateEnemyHealthBar) {
-            game.renderer.updateEnemyHealthBar(this, true); // true = только что получил урон
+            game.renderer.updateEnemyHealthBar(this, true);
         }
 
         // Откидывание при критическом ударе
         if (isCritical && attacker) {
-            this.knockback(attacker.x, attacker.y, 50); // Откидываем на 50 пикселей
+            this.knockback(attacker.x, attacker.y, 50);
         }
 
         if (this.health <= 0) {
             this.health = 0;
-            return actualDamage;
         }
 
         return actualDamage;
@@ -440,27 +439,79 @@ class Enemy {
     }
     
     /**
-     * Получение общего значения характеристики с учётом типа врага
+     * Получение общего значения характеристики
      * @param {string} statName - название характеристики
      * @returns {number} - общее значение характеристики
      */
     getTotalStat(statName) {
+        let baseValue = 0;
+
         switch(statName) {
+            // === ПЕРВИЧНЫЕ ХАРАКТЕРИСТИКИ ===
+            case 'strength':
+            case 'dexterity':
+            case 'vitality':
+            case 'energy':
+            case 'intelligence':
+                baseValue = this[statName] || 0;
+                break;
+
+            // === ЗДОРОВЬЕ И МАНА ===
             case 'health':
-                return this.maxHealth;
+            case 'maxHealth':
+                baseValue = this.vitality * GAME_CONFIG.CHARACTER.VITALITY_HP_MULTIPLIER;
+                break;
+
+            case 'mana':
+            case 'maxMana':
+                baseValue = (this.energy * GAME_CONFIG.CHARACTER.ENERGY_MANA_MULTIPLIER) +
+                           (this.intelligence * GAME_CONFIG.CHARACTER.INTELLIGENCE_MANA_MULTIPLIER);
+                break;
+
+            // === УРОН ===
+            case 'physicalDamage':
+                baseValue = this.strength * GAME_CONFIG.CHARACTER.STRENGTH_PHYSICAL_DAMAGE_MULTIPLIER;
+                break;
+
+            case 'magicDamage':
+                baseValue = this.intelligence * GAME_CONFIG.CHARACTER.INTELLIGENCE_MAGIC_DAMAGE_MULTIPLIER;
+                break;
+
+            // === СКОРОСТЬ АТАКИ ===
+            case 'attackSpeed':
+                baseValue = GAME_CONFIG.CHARACTER.BASE_ATTACK_SPEED +
+                           (this.dexterity * GAME_CONFIG.CHARACTER.DEXTERITY_ATTACK_SPEED_MULTIPLIER);
+                break;
+
+            // === ШАНС КРИТА ===
+            case 'criticalChance':
+                baseValue = this.dexterity * GAME_CONFIG.CHARACTER.DEXTERITY_CRITICAL_MULTIPLIER;
+                break;
+
+            // === ВОССТАНОВЛЕНИЕ МАНЫ ===
+            case 'manaRegen':
+                baseValue = GAME_CONFIG.CHARACTER.BASE_MANA_REGEN +
+                           (this.energy * GAME_CONFIG.CHARACTER.ENERGY_MANA_REGEN_MULTIPLIER) +
+                           (this.intelligence * GAME_CONFIG.CHARACTER.INTELLIGENCE_MANA_REGEN_MULTIPLIER);
+                break;
+
+            // === УСТАРЕВШИЕ (для совместимости) ===
             case 'damage':
-                return this.damage;
+                baseValue = this.strength * GAME_CONFIG.CHARACTER.STRENGTH_PHYSICAL_DAMAGE_MULTIPLIER;
+                break;
+
             case 'armor':
-                return this.stats.armor || 0;
             case 'accuracy':
-                return this.stats.accuracy || 80; // Базовая точность
             case 'dodge':
-                return this.stats.dodge || 5; // Базовое уклонение
-            case 'critical':
-                return this.stats.critical || 5; // Базовый крит. шанс
+                // Убраны из игры
+                baseValue = 0;
+                break;
+
             default:
-                return this[statName] || 0;
+                baseValue = this[statName] || 0;
         }
+
+        return Math.floor(baseValue * 10) / 10;
     }
     
     /**

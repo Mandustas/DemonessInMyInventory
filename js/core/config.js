@@ -30,106 +30,154 @@ const GAME_CONFIG = {
         INITIAL_EXPERIENCE: 0,
         EXPERIENCE_PER_LEVEL: 100,
         EXPERIENCE_MULTIPLIER: 1.5,
-        
-        // Статы
-        INITIAL_STRENGTH: 10,
-        INITIAL_DEXTERITY: 10,
-        INITIAL_VITALITY: 10,
-        INITIAL_ENERGY: 10,
-        
-        // Прирост характеристик при повышении уровня
-        LEVEL_UP_HEALTH_INCREASE: 20,
-        LEVEL_UP_MANA_INCREASE: 10,
-        LEVEL_UP_STAT_INCREASE: 2,
-        LEVEL_UP_ENERGY_INCREASE: 1,
-        
+
+        // Основные характеристики
+        INITIAL_STRENGTH: 10,         // Сила - влияет на физический урон
+        INITIAL_DEXTERITY: 10,        // Ловкость - влияет на скорость атаки и крит
+        INITIAL_VITALITY: 10,         // Живучесть - влияет на здоровье
+        INITIAL_ENERGY: 10,           // Энергия - влияет на ману и регенерацию
+        INITIAL_INTELLIGENCE: 10,     // Интеллект - влияет на магический урон и ману
+
+        // Прирост характеристик при повышении уровня (отменен - только от предметов)
+        LEVEL_UP_HEALTH_INCREASE: 0,  // HP не растет от уровня
+        LEVEL_UP_MANA_INCREASE: 0,    // Mana не растет от уровня
+        LEVEL_UP_STAT_INCREASE: 0,    // Статы не растут от уровня
+        LEVEL_UP_ENERGY_INCREASE: 0,  // Energy не растет от уровня
+
         // Навыки
         SKILL_POINT_PER_LEVEL: 1,
-        MELEE_MASTERY_BONUS: 0.1, // 10% урона за уровень
-        CRITICAL_STRIKE_BONUS: 5, // 5% шанс крита за уровень
-        LIFE_LEECH_BONUS: 2, // 2% похищения за уровень
-        IRON_SKIN_BONUS: 0.1, // 10% брони за уровень
-        DODGE_BONUS: 3, // 3% уклонения за уровень
-        FIREBALL_DAMAGE_BONUS: 10, // +10 урона за уровень
-        HEAL_PERCENT_BONUS: 0.05, // 5% хила за уровень
-        
+        MELEE_MASTERY_BONUS: 0.1,     // 10% физ. урона за уровень навыка
+        CRITICAL_STRIKE_BONUS: 3,     // 3% шанс крита за уровень навыка
+        LIFE_LEECH_BONUS: 2,          // 2% похищения жизни за уровень навыка
+        MAGIC_MASTERY_BONUS: 0.1,     // 10% маг. урона за уровень навыка
+        MANA_EFFICIENCY_BONUS: 0.05,  // 5% снижение стоимости маны за уровень
+        FIREBALL_DAMAGE_BONUS: 10,    // +10 маг. урона за уровень
+        HEAL_PERCENT_BONUS: 0.05,     // 5% лечения за уровень
+
         // Стоимость маны для навыков
         SKILL_MANA_COST: {
-            fireball: { base: 10, per_level: 2 },
-            heal: { base: 8, per_level: 1.5 },
-            default: { base: 5, per_level: 1 }
+            fireball: { base: 15, per_level: 3 },
+            heal: { base: 12, per_level: 2 },
+            default: { base: 8, per_level: 1 }
         },
-        
-        // Значения характеристик
-        VITALITY_HP_MULTIPLIER: 10, // Каждая единица живучести даёт 10 хп
-        ENERGY_MANA_MULTIPLIER: 5, // Каждая единица энергии даёт 5 маны
-        STRENGTH_DAMAGE_MULTIPLIER: 1.5, // Каждая единица силы даёт 1.5 урона
-        VITALITY_ARMOR_MULTIPLIER: 0.5, // Каждая единица живучести даёт 0.5 брони
-        DEXTERITY_ACCURACY_BASE: 80, // Базовый шанс попадания
-        DEXTERITY_ACCURACY_MULTIPLIER: 0.5, // Ловкость влияет на шанс попадания
-        DEXTERITY_DODGE_MULTIPLIER: 0.3, // Ловкость влияет на уклонение
-        DEXTERITY_CRITICAL_MULTIPLIER: 0.2, // Ловкость влияет на крит. шанс
-        
-        // Восстановление маны
-        BASE_MANA_REGEN: 5, // Маны в секунду
+
+        // Формулы характеристик
+        // Здоровье: 10 HP за единицу живучести
+        VITALITY_HP_MULTIPLIER: 10,
+        // Мана: 3 за энергию + 2 за интеллект
+        ENERGY_MANA_MULTIPLIER: 3,
+        INTELLIGENCE_MANA_MULTIPLIER: 2,
+        // Физический урон: 1.5 за единицу силы
+        STRENGTH_PHYSICAL_DAMAGE_MULTIPLIER: 1.5,
+        // Магический урон: 1.5 за единицу интеллекта
+        INTELLIGENCE_MAGIC_DAMAGE_MULTIPLIER: 1.5,
+        // Скорость атаки: базовая 1.0 + 2% за ловкость (100 ловкости = 3.0 атак/сек)
+        DEXTERITY_ATTACK_SPEED_MULTIPLIER: 0.02,
+        BASE_ATTACK_SPEED: 1.0,       // Базовая скорость атаки (атак в секунду)
+        // Шанс крита: 0.5% за ловкость (100 ловкости = 50% крита, макс 50%)
+        DEXTERITY_CRITICAL_MULTIPLIER: 0.5,
+        MAX_CRITICAL_CHANCE: 50,      // Максимальный шанс крита (%)
+        // Восстановление маны: 2 + 0.1 за энергию + 0.05 за интеллект (в секунду)
+        BASE_MANA_REGEN: 2,
         ENERGY_MANA_REGEN_MULTIPLIER: 0.1,
-        
+        INTELLIGENCE_MANA_REGEN_MULTIPLIER: 0.05,
+
         // Хитбоксы
         HITBOX_RADIUS: 16,
-        
+
         // Инвентарь
         INVENTORY_SIZE: 20
     },
     
     // Настройки врагов
     ENEMY: {
+        // Базовые типы врагов с характеристиками
         TYPES: {
             BASIC: {
-                maxHealth: 50,
-                speed: 60, // Пикселей в секунду
-                damage: 10,
+                // Основные характеристики
+                strength: 10,
+                dexterity: 10,
+                vitality: 10,
+                energy: 10,
+                intelligence: 10,
+                // Боевые параметры
+                speed: 60,
                 detectionRange: 100,
-                attackRange: 30
+                attackRange: 30,
+                attackType: 'physical', // physical или magic
+                experienceValue: 20
             },
             WEAK: {
-                maxHealth: 30,
-                speed: 72, // Пикселей в секунду
-                damage: 8,
-                detectionRange: 80,
-                attackRange: 25
+                strength: 6,
+                dexterity: 14,
+                vitality: 8,
+                energy: 10,
+                intelligence: 8,
+                speed: 80,
+                detectionRange: 90,
+                attackRange: 25,
+                attackType: 'physical',
+                experienceValue: 15
             },
             STRONG: {
-                maxHealth: 80,
-                speed: 48, // Пикселей в секунду
-                damage: 15,
-                detectionRange: 120,
-                attackRange: 35
+                strength: 16,
+                dexterity: 8,
+                vitality: 14,
+                energy: 10,
+                intelligence: 8,
+                speed: 45,
+                detectionRange: 110,
+                attackRange: 35,
+                attackType: 'physical',
+                experienceValue: 30
             },
             FAST: {
-                maxHealth: 40,
-                speed: 108, // Пикселей в секунду
-                damage: 12,
-                detectionRange: 150,
-                attackRange: 30
+                strength: 8,
+                dexterity: 18,
+                vitality: 10,
+                energy: 10,
+                intelligence: 10,
+                speed: 100,
+                detectionRange: 130,
+                attackRange: 30,
+                attackType: 'physical',
+                experienceValue: 25
             },
             TANK: {
-                maxHealth: 120,
-                speed: 30, // Пикселей в секунду
-                damage: 20,
-                detectionRange: 70,
-                attackRange: 40
+                strength: 12,
+                dexterity: 6,
+                vitality: 20,
+                energy: 10,
+                intelligence: 8,
+                speed: 30,
+                detectionRange: 80,
+                attackRange: 40,
+                attackType: 'physical',
+                experienceValue: 35
+            },
+            MAGE: {
+                strength: 6,
+                dexterity: 10,
+                vitality: 8,
+                energy: 14,
+                intelligence: 18,
+                speed: 50,
+                detectionRange: 140,
+                attackRange: 50,
+                attackType: 'magic',
+                experienceValue: 35
             }
         },
 
         // Настройки атаки
-        ATTACK_COOLDOWN: 750, // Миллисекунд между атаками
+        ATTACK_COOLDOWN: 1000, // Миллисекунд между атаками (базовое)
 
         // Хитбоксы
         HITBOX_RADIUS: 15,
 
         // Блуждание
-        WANDER_INTERVAL_MIN: 2000, // Миллисекунд
-        WANDER_INTERVAL_MAX: 5000, // Миллисекунд
+        WANDER_INTERVAL_MIN: 2000,
+        WANDER_INTERVAL_MAX: 5000,
         WANDER_DISTANCE_MIN: 30,
         WANDER_DISTANCE_MAX: 100,
         WANDER_SPEED_MULTIPLIER: 0.5
@@ -138,13 +186,11 @@ const GAME_CONFIG = {
     // Настройки боевой системы
     COMBAT: {
         MIN_DAMAGE: 1,
-        DAMAGE_VARIATION_MIN: 0.8, // 80% от базового урона
-        DAMAGE_VARIATION_MAX: 1.2, // 120% от базового урона
-        CRITICAL_DAMAGE_MULTIPLIER: 1.5, // 150% урона при критическом ударе
-        BASE_ACCURACY: 80,
-        ACCURACY_PER_DEXTERITY: 0.5,
-        DODGE_PER_DEXTERITY: 0.3,
-        CRITICAL_CHANCE_PER_DEXTERITY: 0.2
+        DAMAGE_VARIATION_MIN: 0.8,    // 80% от базового урона
+        DAMAGE_VARIATION_MAX: 1.2,    // 120% от базового урона
+        CRITICAL_DAMAGE_MULTIPLIER: 1.5,  // 150% урона при критическом ударе
+        // Убраны: BASE_ACCURACY, ACCURACY_PER_DEXTERITY, DODGE_PER_DEXTERITY
+        CRITICAL_CHANCE_PER_DEXTERITY: 0.5  // 0.5% за ловкость
     },
     
     // Настройки рендеринга
@@ -306,6 +352,37 @@ const GAME_CONFIG = {
             UNCOMMON: 0.8,    // 30% шанс на необычный (0.8 - 0.5 = 0.3)
             RARE: 0.95,       // 15% шанс на редкий (0.95 - 0.8 = 0.15)
             EPIC: 1.0         // 5% шанс на эпический (1.0 - 0.95 = 0.05)
+        },
+        // Количество характеристик на предмете в зависимости от редкости
+        STATS_PER_RARITY: {
+            common: 1,
+            uncommon: 2,
+            rare: 3,
+            epic: 4
+        },
+        // Диапазоны значений характеристик для каждого типа предмета
+        STAT_VALUE_RANGES: {
+            // Основные характеристики
+            strength: { min: 1, max: 5 },
+            dexterity: { min: 1, max: 5 },
+            vitality: { min: 1, max: 5 },
+            energy: { min: 1, max: 5 },
+            intelligence: { min: 1, max: 5 },
+            // Производные характеристики
+            physicalDamage: { min: 2, max: 10 },
+            magicDamage: { min: 2, max: 10 },
+            attackSpeed: { min: 0.05, max: 0.2 },
+            criticalChance: { min: 1, max: 5 },
+            manaRegen: { min: 0.5, max: 2 },
+            health: { min: 10, max: 50 }
+        },
+        // Возможные статы для каждого типа предмета
+        POSSIBLE_STATS_BY_TYPE: {
+            weapon: ['physicalDamage', 'strength', 'dexterity', 'criticalChance', 'attackSpeed'],
+            helmet: ['vitality', 'energy', 'intelligence', 'manaRegen', 'health'],
+            armor: ['vitality', 'strength', 'health', 'energy', 'physicalDamage'],
+            ring: ['strength', 'dexterity', 'vitality', 'energy', 'intelligence', 'criticalChance'],
+            amulet: ['intelligence', 'energy', 'magicDamage', 'manaRegen', 'health', 'strength']
         },
         BASE_VALUE: 10,
         VALUE_MULTIPLIERS: {

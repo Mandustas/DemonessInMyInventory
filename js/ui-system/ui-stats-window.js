@@ -1,6 +1,11 @@
 /**
  * UIStatsWindow - окно характеристик на новой системе UI
  * Изящный дарк фентези стиль с полным отображением статов
+ * 
+ * Структура:
+ * - Секция 1: Основная информация (уровень, здоровье, мана, опыт, очки навыков)
+ * - Секция 2: Основные характеристики (сила, ловкость, живучесть, энергия, интеллект)
+ * - Секция 3: Производные характеристики (физ. урон, маг. урон, скорость атаки, шанс крита, реген. маны)
  */
 class UIStatsWindow extends UIComponent {
     constructor(character, config = {}) {
@@ -9,8 +14,8 @@ class UIStatsWindow extends UIComponent {
         this.character = character;
 
         // Размеры окна
-        this.width = 380;
-        this.height = 450;
+        this.width = 420;
+        this.height = 520;
         this.padding = 20;
 
         // Позиционирование по центру
@@ -18,6 +23,28 @@ class UIStatsWindow extends UIComponent {
 
         // Кеш текстовых спрайтов для обновления
         this.textSprites = {};
+        
+        // Цвета для различных типов характеристик
+        this.colors = {
+            // Основная информация
+            level: '#FFD700',      // Золотой
+            health: '#4CAF50',     // Зеленый
+            mana: '#2196F3',       // Синий
+            experience: '#FF9800', // Оранжевый
+            skillPoints: '#9C27B0',// Фиолетовый
+            // Основные характеристики
+            strength: '#FF5722',   // Красно-оранжевый
+            dexterity: '#03A9F4',  // Голубой
+            vitality: '#4CAF50',   // Зеленый
+            energy: '#2196F3',     // Синий
+            intelligence: '#9C27B0',// Фиолетовый
+            // Производные характеристики
+            physicalDamage: '#E91E63', // Розовый
+            magicDamage: '#673AB7',    // Темно-фиолетовый
+            attackSpeed: '#FFC107',    // Янтарный
+            criticalChance: '#FF5722', // Красно-оранжевый
+            manaRegen: '#00BCD4'       // Бирюзовый
+        };
     }
 
     /**
@@ -33,7 +60,7 @@ class UIStatsWindow extends UIComponent {
     }
 
     /**
-     * Основной метод отрисовки - отображает все статы
+     * Основной метод отрисовки - отображает все статы по трём секциям
      */
     renderStats() {
         // Очищаем контейнер
@@ -42,62 +69,80 @@ class UIStatsWindow extends UIComponent {
 
         let currentY = this.padding + 35; // После заголовка
 
-        // === ОСНОВНЫЕ ХАРАКТЕРИСТИКИ ===
-        
-        // Заголовок секции
-        currentY = this.renderSectionHeader('Основные характеристики:', currentY);
+        // === СЕКЦИЯ 1: ОСНОВНАЯ ИНФОРМАЦИЯ ===
+        currentY = this.renderSectionHeader('Основная информация:', currentY);
 
         // Уровень (золотой)
-        currentY = this.renderStatRow('Уровень:', this.character.level, '#FFD700', currentY);
+        currentY = this.renderStatRow('Уровень:', this.character.level, this.colors.level, currentY);
 
         // Здоровье (зеленый)
         const healthText = `${this.character.health}/${this.character.maxHealth}`;
-        currentY = this.renderStatRow('Здоровье:', healthText, '#4CAF50', currentY);
+        currentY = this.renderStatRow('Здоровье:', healthText, this.colors.health, currentY);
 
         // Мана (синий)
         const manaText = `${Math.floor(this.character.mana)}/${this.character.maxMana}`;
-        currentY = this.renderStatRow('Мана:', manaText, '#2196F3', currentY);
+        currentY = this.renderStatRow('Мана:', manaText, this.colors.mana, currentY);
 
         // Опыт (оранжевый)
         const expText = `${this.character.experience}/${this.character.experienceForNextLevel}`;
-        currentY = this.renderStatRow('Опыт:', expText, '#FF9800', currentY);
+        currentY = this.renderStatRow('Опыт:', expText, this.colors.experience, currentY);
 
         // Очки навыков (фиолетовый)
-        currentY = this.renderStatRow('Очков навыков:', this.character.skillPoints.toString(), '#9C27B0', currentY);
+        currentY = this.renderStatRow('Очков навыков:', this.character.skillPoints.toString(), this.colors.skillPoints, currentY);
 
         // Разделитель
-        currentY += 10;
+        currentY += 5;
         currentY = this.renderDivider(currentY);
-        currentY += 10;
+        currentY += 15;
 
-        // === ВТОРИЧНЫЕ ХАРАКТЕРИСТИКИ ===
+        // === СЕКЦИЯ 2: ОСНОВНЫЕ ХАРАКТЕРИСТИКИ ===
+        currentY = this.renderSectionHeader('Основные характеристики:', currentY);
 
-        // Заголовок секции
-        currentY = this.renderSectionHeader('Статы:', currentY);
-
-        // Получаем бонусы
-        const damageBonus = this.character.getTotalStat ? this.character.getTotalStat('damage') : 0;
-        const accuracyBonus = this.character.getTotalStat ? this.character.getTotalStat('accuracy') : 0;
-        const dodgeBonus = this.character.getTotalStat ? this.character.getTotalStat('dodge') : 0;
-        const healthBonus = this.character.getTotalStat ? this.character.getTotalStat('health') : 0;
-        const armorBonus = this.character.getTotalStat ? this.character.getTotalStat('armor') : 0;
-        const manaBonus = this.character.getTotalStat ? this.character.getTotalStat('mana') : 0;
-        const manaRegen = this.character.getManaRegenRate ? this.character.getManaRegenRate().toFixed(1) : '0';
-
-        // Сила (оранжевый)
-        currentY = this.renderStatRowWithBonus('Сила:', this.character.strength, `+${damageBonus}`, '#FF5722', currentY);
+        // Сила (оранжево-красный)
+        currentY = this.renderStatRow('Сила:', this.character.strength, this.colors.strength, currentY);
 
         // Ловкость (голубой)
-        const dexBonus = `+${accuracyBonus}% точн., +${dodgeBonus}% уклон.`;
-        currentY = this.renderStatRowWithBonus('Ловкость:', this.character.dexterity, dexBonus, '#03A9F4', currentY);
+        currentY = this.renderStatRow('Ловкость:', this.character.dexterity, this.colors.dexterity, currentY);
 
         // Живучесть (зеленый)
-        const vitBonus = `+${healthBonus} хп, +${armorBonus} брони`;
-        currentY = this.renderStatRowWithBonus('Живучесть:', this.character.vitality, vitBonus, '#4CAF50', currentY);
+        currentY = this.renderStatRow('Живучесть:', this.character.vitality, this.colors.vitality, currentY);
 
         // Энергия (синий)
-        const eneBonus = `+${manaBonus} маны, +${manaRegen}/сек`;
-        currentY = this.renderStatRowWithBonus('Энергия:', this.character.energy, eneBonus, '#2196F3', currentY);
+        currentY = this.renderStatRow('Энергия:', this.character.energy, this.colors.energy, currentY);
+
+        // Интеллект (фиолетовый)
+        currentY = this.renderStatRow('Интеллект:', this.character.intelligence, this.colors.intelligence, currentY);
+
+        // Разделитель
+        currentY += 5;
+        currentY = this.renderDivider(currentY);
+        currentY += 15;
+
+        // === СЕКЦИЯ 3: ПРОИЗВОДНЫЕ ХАРАКТЕРИСТИКИ ===
+        currentY = this.renderSectionHeader('Боевые характеристики:', currentY);
+
+        // Физический урон (розовый)
+        const physicalDamage = this.character.getTotalStat('physicalDamage');
+        currentY = this.renderStatRow('Физ. урон:', physicalDamage, this.colors.physicalDamage, currentY);
+
+        // Магический урон (темно-фиолетовый)
+        const magicDamage = this.character.getTotalStat('magicDamage');
+        currentY = this.renderStatRow('Маг. урон:', magicDamage, this.colors.magicDamage, currentY);
+
+        // Скорость атаки (янтарный)
+        const attackSpeed = this.character.getTotalStat('attackSpeed').toFixed(2);
+        currentY = this.renderStatRow('Скорость атаки:', `${attackSpeed}/сек`, this.colors.attackSpeed, currentY);
+
+        // Шанс крита (красно-оранжевый)
+        const criticalChance = Math.min(
+            this.character.getTotalStat('criticalChance'),
+            GAME_CONFIG.CHARACTER.MAX_CRITICAL_CHANCE
+        ).toFixed(1);
+        currentY = this.renderStatRow('Шанс крита:', `${criticalChance}%`, this.colors.criticalChance, currentY);
+
+        // Регенерация маны (бирюзовый)
+        const manaRegen = this.character.getManaRegenRate().toFixed(1);
+        currentY = this.renderStatRow('Реген. маны:', `${manaRegen}/сек`, this.colors.manaRegen, currentY);
 
         // Обновляем высоту контейнера
         this.height = currentY + this.padding + 20;
@@ -152,57 +197,14 @@ class UIStatsWindow extends UIComponent {
             color: color,
             bold: true
         });
-        valueText.x = this.padding + 130;
+        valueText.x = this.padding + 150;
         valueText.y = y;
         this.textContainer.addChild(valueText);
 
         // Сохраняем ссылку для обновления
         this.textSprites[label] = { label: labelText, value: valueText, type: 'simple' };
 
-        return y + 20;
-    }
-
-    /**
-     * Отрисовка строки стата с бонусом
-     */
-    renderStatRowWithBonus(label, value, bonus, color, y) {
-        // Название стата
-        const labelText = this.createText(label, {
-            fontSize: 14,
-            color: '#c9b896'
-        });
-        labelText.x = this.padding;
-        labelText.y = y;
-        this.textContainer.addChild(labelText);
-
-        // Значение стата
-        const valueText = this.createText(value.toString(), {
-            fontSize: 14,
-            color: color,
-            bold: true
-        });
-        valueText.x = this.padding + 80;
-        valueText.y = y;
-        this.textContainer.addChild(valueText);
-
-        // Бонус
-        const bonusText = this.createText(`(${bonus})`, {
-            fontSize: 12,
-            color: '#8a7a6a'
-        });
-        bonusText.x = this.padding + 130;
-        bonusText.y = y;
-        this.textContainer.addChild(bonusText);
-
-        // Сохраняем ссылки для обновления
-        this.textSprites[label] = { 
-            label: labelText, 
-            value: valueText, 
-            bonus: bonusText,
-            type: 'bonus' 
-        };
-
-        return y + 20;
+        return y + 22;
     }
 
     /**

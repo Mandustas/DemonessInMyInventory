@@ -2,14 +2,14 @@ class Item {
     constructor(type, name, stats = {}) {
         this.type = type; // weapon, helmet, armor, ring, amulet
         this.name = name;
-        this.stats = stats; // Объект с бонусами {strength: 2, damage: 10, ...}
-        this.rarity = this.generateRarity(); // обычный, редкий, эпический и т.д.
-        this.value = this.calculateValue(); // стоимость предмета
+        this.stats = stats; // Объект с бонусами {strength: 2, physicalDamage: 10, ...}
+        this.rarity = this.generateRarity();
+        this.value = this.calculateValue();
     }
-    
+
     /**
      * Генерация редкости предмета
-     * @returns {string} - редкость (common, rare, epic, legendary)
+     * @returns {string} - редкость (common, uncommon, rare, epic)
      */
     generateRarity() {
         const roll = Math.random();
@@ -19,7 +19,7 @@ class Item {
         else if (roll < GAME_CONFIG.ITEMS.RARITY_CHANCES.RARE) return 'rare';
         else return 'epic';
     }
-    
+
     /**
      * Расчет стоимости предмета на основе редкости и статов
      * @returns {number} - стоимость
@@ -42,7 +42,7 @@ class Item {
 
         return Math.floor(baseValue + statsSum * GAME_CONFIG.ITEMS.STAT_VALUE_MULTIPLIER);
     }
-    
+
     /**
      * Получение цвета для отображения в зависимости от редкости
      * @returns {string} - цвет в формате CSS
@@ -56,25 +56,40 @@ class Item {
             default: return '#ffffff';
         }
     }
-    
+
     /**
      * Получение описания предмета
      * @returns {string} - описание
      */
     getDescription() {
         let description = `<b>${this.name}</b><br>`;
-        description += `<span style="color:${this.getColorByRarity()}">${this.rarity.toUpperCase()}</span><br><br>`;
-        
+        description += `<span style="color:${this.getColorByRarity()}">${this.getRarityDisplayName()}</span><br><br>`;
+
         for (const stat in this.stats) {
             const statName = this.getStatDisplayName(stat);
-            description += `+${this.stats[stat]} ${statName}<br>`;
+            const statValue = this.stats[stat];
+            description += `+${statValue} ${statName}<br>`;
         }
-        
+
         description += `<br>Стоимость: ${this.value} золота`;
-        
+
         return description;
     }
-    
+
+    /**
+     * Получение отображаемого названия редкости
+     * @returns {string}
+     */
+    getRarityDisplayName() {
+        const names = {
+            'common': 'Обычный',
+            'uncommon': 'Необычный',
+            'rare': 'Редкий',
+            'epic': 'Эпический'
+        };
+        return names[this.rarity] || this.rarity;
+    }
+
     /**
      * Получение отображаемого названия стата
      * @param {string} stat - внутреннее имя стата
@@ -82,17 +97,26 @@ class Item {
      */
     getStatDisplayName(stat) {
         const statNames = {
-            'damage': 'Урон',
-            'armor': 'Броня',
+            // Основные характеристики
             'strength': 'Сила',
             'dexterity': 'Ловкость',
             'vitality': 'Живучесть',
             'energy': 'Энергия',
+            'intelligence': 'Интеллект',
+            // Производные характеристики
+            'physicalDamage': 'Физ. урон',
+            'magicDamage': 'Маг. урон',
+            'attackSpeed': 'Скорость атаки',
+            'criticalChance': 'Шанс крита',
+            'manaRegen': 'Реген. маны',
             'health': 'Здоровье',
+            // Устаревшие (для совместимости)
+            'damage': 'Урон',
+            'armor': 'Броня',
             'accuracy': 'Меткость',
             'dodge': 'Уклонение'
         };
-        
+
         return statNames[stat] || stat;
     }
 }
@@ -102,7 +126,7 @@ function generateRandomItem(level = 1) {
     // Типы предметов
     const itemTypes = ['weapon', 'helmet', 'armor', 'ring', 'amulet'];
     const itemType = itemTypes[Math.floor(Math.random() * itemTypes.length)];
-    
+
     // Базовые названия для разных типов
     const itemNames = {
         'weapon': ['Меч', 'Топор', 'Кинжал', 'Посох', 'Лук'],
@@ -111,48 +135,54 @@ function generateRandomItem(level = 1) {
         'ring': ['Кольцо', 'Перстень', 'Обруч'],
         'amulet': ['Амулет', 'Кулон', 'Подвеска']
     };
-    
+
     // Выбираем случайное имя для типа предмета
     const itemName = itemNames[itemType][Math.floor(Math.random() * itemNames[itemType].length)];
-    
+
     // Генерируем случайные статы в зависимости от типа и уровня
     const stats = {};
+
+    // Получаем возможные статы для этого типа предмета из конфига
+    const possibleStats = GAME_CONFIG.ITEMS.POSSIBLE_STATS_BY_TYPE[itemType] || 
+                          ['strength', 'dexterity', 'vitality', 'energy', 'intelligence'];
+
+    // Определяем количество статов в зависимости от редкости
+    // Сначала генерируем редкость, чтобы знать сколько статов давать
+    const rarityRoll = Math.random();
+    let rarity = 'common';
+    if (rarityRoll >= GAME_CONFIG.ITEMS.RARITY_CHANCES.RARE) rarity = 'rare';
+    else if (rarityRoll >= GAME_CONFIG.ITEMS.RARITY_CHANCES.UNCOMMON) rarity = 'uncommon';
     
-    // Определяем возможные статы для каждого типа
-    let possibleStats = [];
-    switch(itemType) {
-        case 'weapon':
-            possibleStats = ['damage', 'strength', 'dexterity'];
-            break;
-        case 'helmet':
-            possibleStats = ['armor', 'vitality', 'energy'];
-            break;
-        case 'armor':
-            possibleStats = ['armor', 'vitality', 'dodge'];
-            break;
-        case 'ring':
-            possibleStats = ['strength', 'dexterity', 'vitality', 'energy'];
-            break;
-        case 'amulet':
-            possibleStats = ['energy', 'strength', 'dexterity', 'health'];
-            break;
-    }
-    
-    // Добавляем 1-3 случайных стата
-    const statsCount = Math.floor(Math.random() * 3) + 1;
+    const statsCount = GAME_CONFIG.ITEMS.STATS_PER_RARITY[rarity] || 1;
+
+    // Добавляем случайные статы
     const selectedStats = [];
-    
+
     for (let i = 0; i < statsCount; i++) {
         const randomStat = possibleStats[Math.floor(Math.random() * possibleStats.length)];
         if (!selectedStats.includes(randomStat)) {
             selectedStats.push(randomStat);
+
+            // Получаем диапазон значений для этого стата
+            const statRange = GAME_CONFIG.ITEMS.STAT_VALUE_RANGES[randomStat];
+            let statValue;
             
-            // Значение стата зависит от уровня
-            const statValue = Math.floor(Math.random() * level) + 1;
+            if (statRange) {
+                // Генерируем значение в диапазоне
+                const range = statRange.max - statRange.min;
+                // Значение зависит от уровня (но не больше максимума)
+                const levelBonus = Math.min(level - 1, 5); // Максимум +5 уровней
+                statValue = Math.floor(statRange.min + Math.random() * range) + Math.floor(levelBonus / 2);
+                statValue = Math.max(statRange.min, Math.min(statValue, statRange.max));
+            } else {
+                // fallback для неизвестных статов
+                statValue = Math.floor(Math.random() * level) + 1;
+            }
+            
             stats[randomStat] = statValue;
         }
     }
-    
+
     // Создаем и возвращаем предмет
     return new Item(itemType, itemName, stats);
 }

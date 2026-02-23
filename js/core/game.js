@@ -271,11 +271,15 @@ class Game {
             }, 600);
         }
 
-        // Скрываем игровые UI элементы
+        // Скрываем ВСЕ игровые UI элементы
         if (this.uiSkillBar) this.uiSkillBar.visible = false;
         if (this.uiMinimap) this.uiMinimap.visible = false;
         if (this.uiPanelButtons) this.uiPanelButtons.visible = false;
         if (this.uiActionLog) this.uiActionLog.visible = false;
+        if (this.uiInventory) this.uiInventory.visible = false;
+        if (this.uiStatsWindow) this.uiStatsWindow.visible = false;
+        if (this.uiSkillTree) this.uiSkillTree.visible = false;
+        if (this.uiDeathScreen) this.uiDeathScreen.visible = false;
 
         // Закрываем splash screen если открыт
         if (this.uiSplashScreen && this.uiSplashScreen.visible) {
@@ -306,11 +310,14 @@ class Game {
             this.audioSystem.fadeOutMusic(500);
         }
 
-        // Скрываем игровые UI элементы
+        // Скрываем ВСЕ игровые UI элементы
         if (this.uiSkillBar) this.uiSkillBar.visible = false;
         if (this.uiMinimap) this.uiMinimap.visible = false;
         if (this.uiPanelButtons) this.uiPanelButtons.visible = false;
         if (this.uiActionLog) this.uiActionLog.visible = false;
+        if (this.uiInventory) this.uiInventory.visible = false;
+        if (this.uiStatsWindow) this.uiStatsWindow.visible = false;
+        if (this.uiSkillTree) this.uiSkillTree.visible = false;
 
         // Показываем экран смерти
         if (this.uiDeathScreen) {
@@ -1000,6 +1007,26 @@ class Game {
     }
 
     /**
+     * Расчет опыта за убийство врага
+     * @param {Enemy} enemy - убитый враг
+     * @returns {number} - количество опыта
+     */
+    calculateExperienceReward(enemy) {
+        // Базовый опыт зависит от типа врага
+        const baseExp = enemy.experienceValue || 20;
+        
+        // Множитель от характеристик врага
+        const vitalityBonus = Math.floor(enemy.vitality * 0.5);
+        const strengthBonus = Math.floor(enemy.strength * 0.3);
+        const intelligenceBonus = Math.floor(enemy.intelligence * 0.4);
+        
+        // Итоговый опыт
+        const totalExp = baseExp + vitalityBonus + strengthBonus + intelligenceBonus;
+        
+        return Math.max(1, totalExp);
+    }
+
+    /**
      * Выпадение предметов с врага
      * @param {Enemy} enemy - враг, с которого выпадают предметы
      */
@@ -1071,12 +1098,12 @@ class Game {
      */
     getMonsterStrengthFactor(enemy) {
         // Базовые характеристики для сравнения
-        const baseHealth = GAME_CONFIG.ENEMY.TYPES.BASIC.maxHealth;
-        const baseDamage = GAME_CONFIG.ENEMY.TYPES.BASIC.damage;
+        const baseHealth = GAME_CONFIG.ENEMY.TYPES.BASIC.vitality * GAME_CONFIG.CHARACTER.VITALITY_HP_MULTIPLIER;
+        const baseDamage = GAME_CONFIG.ENEMY.TYPES.BASIC.strength * GAME_CONFIG.CHARACTER.STRENGTH_PHYSICAL_DAMAGE_MULTIPLIER;
 
         // Рассчитываем общий показатель силы врага
-        const healthFactor = enemy.stats.maxHealth / baseHealth;
-        const damageFactor = enemy.damage / baseDamage;
+        const healthFactor = enemy.maxHealth / baseHealth;
+        const damageFactor = enemy.getTotalStat('physicalDamage') / baseDamage;
 
         // Взвешиваем факторы (здоровье важнее урона)
         return (healthFactor * 0.6 + damageFactor * 0.4);
@@ -1199,8 +1226,9 @@ class Game {
 
             // Проверяем, жив ли враг
             if (!enemy.isAlive()) {
-                // Добавляем опыт за убийство
-                this.character.gainExperience(enemy.stats.maxHealth / 2);
+                // Добавляем опыт за убийство (на основе типа врага и его характеристик)
+                const experienceReward = this.calculateExperienceReward(enemy);
+                this.character.gainExperience(experienceReward);
 
                 // Добавляем сообщение в лог об убийстве
                 if (this.uiActionLog) {
