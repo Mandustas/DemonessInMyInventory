@@ -48,19 +48,24 @@ class Fireball extends Projectile {
      */
     createSprite() {
         // Контейнер уже создан в родительском классе
-        
+
         // Создаём графику для частиц пламени
         this.flameGraphics = new PIXI.Graphics();
         this.container.addChild(this.flameGraphics);
-        
+
         // Создаём эффект свечения
         this.glowGraphics = new PIXI.Graphics();
         this.glowGraphics.blendMode = PIXI.BLEND_MODES.ADD;
         this.container.addChild(this.glowGraphics);
-        
+
         // Инициализируем частицы
         this.initParticles();
+
+        // Обновляем графику сразу при создании
+        this.updateGraphics();
         
+        console.log(`Fireball создан в (${this.x}, ${this.y}), цель (${this.targetX}, ${this.targetY})`);
+
         // Создаём источник света
         if (this.lightSource === null) {
             this.createLightSource(window.game?.lightingSystem, {
@@ -247,27 +252,35 @@ class Fireball extends Projectile {
     }
     
     /**
-     * Нанесение урона в области взрыва
+     * Нанесение урона в областях взрыва
      */
     dealExplosionDamage() {
         const tileSize = GAME_CONFIG.TILE.BASE_SIZE;
         const explosionRadiusPixels = this.explosionRadius * tileSize;
-        
-        // Получаем врагов из игры
+
+        // Собираем все цели: игрок и враги
+        const allTargets = [];
+        const player = window.game?.character;
         const enemies = window.game?.enemies || [];
-        
-        for (const enemy of enemies) {
-            const dx = enemy.x - this.x;
-            const dy = enemy.y - this.y;
+
+        if (player) allTargets.push(player);
+        allTargets.push(...enemies);
+
+        for (const target of allTargets) {
+            // Игнорируем владельца снаряда
+            if (target === this.owner) continue;
+
+            const dx = target.x - this.x;
+            const dy = target.y - this.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            
+
             if (distance <= explosionRadiusPixels) {
                 // Урон уменьшается с расстоянием
                 const damageMultiplier = 1 - (distance / explosionRadiusPixels) * 0.5;
                 const actualDamage = Math.floor(this.damage * damageMultiplier);
-                
-                if (enemy.takeDamage) {
-                    enemy.takeDamage(actualDamage);
+
+                if (target.takeDamage) {
+                    target.takeDamage(actualDamage);
                 }
             }
         }
@@ -369,6 +382,9 @@ class Fireball extends Projectile {
     checkCollision(target) {
         if (!target) return false;
         
+        // Игнорируем владельца снаряда
+        if (target === this.owner) return false;
+        
         const dx = target.x - this.x;
         const dy = target.y - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
@@ -396,7 +412,7 @@ class FireballFactory {
         const baseDamage = character.getTotalStat('damage') * 0.5;
         const skillBonus = character.getSkillBonus('fireball');
         const totalDamage = baseDamage + skillBonus;
-        
+
         return new Fireball({
             x: character.x,
             y: character.y,
@@ -404,6 +420,7 @@ class FireballFactory {
             targetY: targetY,
             damage: totalDamage,
             owner: character,
+            isEnemyProjectile: false,  // Снаряд игрока
             speed: GAME_CONFIG.LIGHTING.FIREBALL.SPEED,
             lightRadius: GAME_CONFIG.LIGHTING.FIREBALL.LIGHT_RADIUS,
             lightColor: GAME_CONFIG.LIGHTING.FIREBALL.LIGHT_COLOR,

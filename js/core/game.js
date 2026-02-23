@@ -138,6 +138,9 @@ class Game {
         // Инициализируем менеджер снарядов
         this.projectileManager = new ProjectileManager(this.lightingSystem);
         this.projectileManager.init();
+        
+        // Добавляем контейнер снарядов в сцену
+        this.renderer.objectLayer.addChild(this.projectileManager.getContainer());
 
         // Переменные для подсчёта FPS
         this.lastTime = 0;
@@ -452,6 +455,18 @@ class Game {
                 }
             }
         });
+
+        // Обработчик отладочной кнопки +500 XP
+        const debugXpBtn = document.getElementById('debugXpBtn');
+        if (debugXpBtn) {
+            debugXpBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.gameState === 'playing' && this.character) {
+                    this.character.gainExperience(500);
+                    console.log('[Debug] Добавлено 500 опыта');
+                }
+            });
+        }
     }
 
     /**
@@ -1299,7 +1314,7 @@ class Game {
 
         // Обновляем снаряды
         if (this.projectileManager) {
-            this.projectileManager.update(deltaTime, this.enemies);
+            this.projectileManager.update(deltaTime, this.enemies, this.character);
         }
 
         // Обновляем UI каждый кадр для отзывчивости

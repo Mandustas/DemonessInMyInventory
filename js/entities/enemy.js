@@ -337,6 +337,7 @@ class Enemy {
                 targetY: target.y,
                 damage: baseDamage,
                 owner: this,
+                isEnemyProjectile: true,  // Помечаем как вражеский
                 speed: GAME_CONFIG.LIGHTING.FIREBALL.SPEED,
                 lightRadius: GAME_CONFIG.LIGHTING.FIREBALL.LIGHT_RADIUS,
                 lightColor: GAME_CONFIG.LIGHTING.FIREBALL.LIGHT_COLOR,
@@ -345,9 +346,10 @@ class Enemy {
                 particleCount: GAME_CONFIG.LIGHTING.FIREBALL.PARTICLE_COUNT
             });
             game.projectileManager.addProjectile(fireball);
+            console.log(`MAGE выстрелил огненным шаром: позиция (${this.x.toFixed(0)}, ${this.y.toFixed(0)}), цель (${target.x.toFixed(0)}, ${target.y.toFixed(0)})`);
+        } else {
+            console.warn('ProjectileManager не доступен для создания файрбола');
         }
-
-        console.log(`MAGE выстрелил огненным шаром в игрока`);
     }
 
     /**

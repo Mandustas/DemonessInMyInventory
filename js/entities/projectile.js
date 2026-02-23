@@ -174,10 +174,11 @@ class Projectile {
         const dx = this.targetX - this.x;
         const dy = this.targetY - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        return distance < this.speed;
+
+        // Проверяем, достигли ли цели (с учётом размера цели)
+        return distance < 20;
     }
-    
+
     /**
      * Обработка достижения цели
      * Переопределяется в дочерних классах
@@ -185,7 +186,7 @@ class Projectile {
     onReachTarget() {
         this.active = false;
     }
-    
+
     /**
      * Проверка столкновения с целью
      * @param {Object} target - цель с координатами x, y и hitboxRadius
@@ -193,13 +194,16 @@ class Projectile {
      */
     checkCollision(target) {
         if (!target) return false;
-        
+
+        // Игнорируем владельца снаряда
+        if (target === this.owner) return false;
+
         const dx = target.x - this.x;
         const dy = target.y - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         const hitRadius = target.hitboxRadius || 16;
-        
-        return distance < hitRadius + 5;
+
+        return distance < hitRadius + 10;
     }
     
     /**
@@ -288,49 +292,66 @@ class ProjectileManager {
      * Обновление всех снарядов
      * @param {number} deltaTime - время с последнего обновления в мс
      * @param {Array} enemies - массив врагов для проверки столкновений
+     * @param {Character} player - персонаж для проверки столкновений
      * @returns {Array} - массив снарядов, достигших цели
      */
-    update(deltaTime, enemies = []) {
+    update(deltaTime, enemies = [], player = null) {
         const reachedProjectiles = [];
         const toRemove = [];
-        
+
         for (const [id, projectile] of this.projectiles) {
             const active = projectile.update(deltaTime);
-            
-            // Проверяем столкновения с врагами
-            if (enemies.length > 0 && projectile.active) {
-                for (const enemy of enemies) {
-                    if (projectile.checkCollision(enemy)) {
-                        projectile.reachedTarget = true;
-                        projectile.onReachTarget();
-                        
-                        // Наносим урон
-                        if (enemy.takeDamage) {
-                            enemy.takeDamage(projectile.damage);
-                        }
-                        
-                        reachedProjectiles.push({
-                            projectile,
-                            target: enemy
-                        });
-                        break;
+
+            // Проверяем столкновения
+            if (projectile.active) {
+                let hitTarget = null;
+
+                // Если это вражеский снаряд, проверяем столкновение только с игроком
+                if (projectile.isEnemyProjectile === true && player) {
+                    if (projectile.checkCollision(player)) {
+                        hitTarget = player;
                     }
                 }
+                // Если это снаряд игрока, проверяем столкновение с врагами
+                else if (projectile.isEnemyProjectile === false && enemies.length > 0) {
+                    for (const enemy of enemies) {
+                        if (projectile.checkCollision(enemy)) {
+                            hitTarget = enemy;
+                            break;
+                        }
+                    }
+                }
+
+                // Если попали в цель
+                if (hitTarget) {
+                    projectile.reachedTarget = true;
+                    projectile.onReachTarget();
+
+                    // Наносим урон
+                    if (hitTarget.takeDamage) {
+                        hitTarget.takeDamage(projectile.damage);
+                    }
+
+                    reachedProjectiles.push({
+                        projectile,
+                        target: hitTarget
+                    });
+                }
             }
-            
+
             if (!active || projectile.reachedTarget) {
                 toRemove.push(id);
-                if (projectile.reachedTarget) {
+                if (projectile.reachedTarget && !reachedProjectiles.find(r => r.projectile === projectile)) {
                     reachedProjectiles.push({ projectile, target: null });
                 }
             }
         }
-        
+
         // Удаляем неактивные снаряды
         for (const id of toRemove) {
             this.removeProjectile(id);
         }
-        
+
         return reachedProjectiles;
     }
     
@@ -365,11 +386,7 @@ class ProjectileManager {
      * @param {PIXIRenderer} renderer - рендерер
      */
     render(renderer) {
-        if (!renderer || !this.container) return;
-        
-        // Добавляем контейнер снарядов в mainContainer рендерера
-        if (renderer.mainContainer && !renderer.mainContainer.children.includes(this.container)) {
-            renderer.mainContainer.addChild(this.container);
-        }
+        // Контейнер уже добавлен в сцену при инициализации
+        // Этот метод нужен для совместимости
     }
 }
