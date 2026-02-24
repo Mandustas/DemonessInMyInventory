@@ -100,7 +100,12 @@ class PIXIRenderer {
         });
         this.mainContainer.addChild(this.combatParticleLayer);
 
-        // Слой для предметов (над частицами, под UI)
+        // Слой для сундуков (под предметами)
+        this.chestLayer = new PIXI.Container();
+        this.chestLayer.sortableChildren = true;
+        this.mainContainer.addChild(this.chestLayer);
+
+        // Слой для предметов (над сундуками)
         this.itemLayer = new PIXI.Container();
         this.itemLayer.eventMode = 'passive'; // Пропускаем события через контейнер, но обрабатываем на детях
         this.mainContainer.addChild(this.itemLayer);

@@ -159,12 +159,22 @@ class Game {
         this.torchManager = new TorchManager(this.lightingSystem);
         this.torchManager.init();
 
+        // Добавляем контейнер факелов в сцену
+        this.renderer.mainContainer.addChild(this.torchManager.getContainer());
+
+        // Инициализируем менеджер сундуков
+        this.chestManager = new ChestManager();
+        this.chestManager.init();
+
         // Инициализируем менеджер снарядов
         this.projectileManager = new ProjectileManager(this.lightingSystem);
         this.projectileManager.init();
-        
+
         // Добавляем контейнер снарядов в сцену
         this.renderer.objectLayer.addChild(this.projectileManager.getContainer());
+
+        // Добавляем контейнер сундуков в chestLayer (над itemLayer)
+        this.renderer.chestLayer.addChild(this.chestManager.getContainer());
 
         // Переменные для подсчёта FPS
         this.lastTime = 0;
@@ -195,9 +205,23 @@ class Game {
         // Загружаем чанки вокруг персонажа
         const spawnTilePos = getTileIndex(this.character.x, this.character.y);
         this.chunkSystem.loadChunksAround(spawnTilePos.tileX, spawnTilePos.tileY);
-        
+
         // Отмечаем начальные чанки (для отладочной визуализации)
         this.chunkSystem.markInitialChunks(spawnTilePos.tileX, spawnTilePos.tileY);
+
+        // Генерируем факелы в загруженных чанках
+        if (this.torchManager) {
+            this.torchManager.generateTorches(this.chunkSystem.chunks, GAME_CONFIG.TILE.BASE_SIZE);
+        }
+
+        // Генерируем сундуки в загруженных чанках
+        if (this.chestManager) {
+            this.chestManager.generateChests(
+                this.chunkSystem.chunks,
+                GAME_CONFIG.TILE.BASE_SIZE,
+                { x: spawnTilePos.tileX, y: spawnTilePos.tileY }
+            );
+        }
 
         // Создаем врагов в стартовой области
         this.spawnEnemies();
@@ -1291,6 +1315,15 @@ class Game {
                 this.torchManager.generateTorches(this.chunkSystem.chunks, GAME_CONFIG.TILE.BASE_SIZE);
             }
 
+            // Генерируем сундуки в новых чанках
+            if (this.chestManager) {
+                this.chestManager.generateChests(
+                    this.chunkSystem.chunks,
+                    GAME_CONFIG.TILE.BASE_SIZE,
+                    charTilePos
+                );
+            }
+
             // ОБНОВЛЯЕМ освещение с принудительной очисткой кэша для новых чанков
             if (this.lightingSystem) {
                 this.lightingSystem.setLightSource(this.character.x, this.character.y, true);
@@ -1388,6 +1421,17 @@ class Game {
             if (shouldRunPeriodicTasks) {
                 const unloadDistance = (GAME_CONFIG.LIGHTING.TORCH.UNLOAD_DISTANCE || 20) * GAME_CONFIG.TILE.BASE_SIZE;
                 this.torchManager.cullTorches(this.character.x, this.character.y, unloadDistance);
+            }
+        }
+
+        // Обновляем сундуки
+        if (this.chestManager) {
+            this.chestManager.update(deltaTime);
+
+            // Периодически очищаем далёкие сундуки (раз в секунду)
+            if (shouldRunPeriodicTasks) {
+                const chestUnloadDistance = (GAME_CONFIG.MAP.CHESTS.MIN_DISTANCE_FROM_PLAYER || 20) * GAME_CONFIG.TILE.BASE_SIZE * 1.5;
+                this.chestManager.cullChests(this.character.x, this.character.y, chestUnloadDistance);
             }
         }
 

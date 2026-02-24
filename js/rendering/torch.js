@@ -404,34 +404,43 @@ class TorchManager {
     generateTorches(chunks, tileSize) {
         const torchConfig = GAME_CONFIG.LIGHTING.TORCH;
         const minDistance = torchConfig.MIN_DISTANCE * tileSize;
-        
+
         // Проходим по всем чанкам
         for (const [chunkKey, chunk] of chunks) {
             // Пропускаем чанки, где ещё не сгенерированы тайлы
-            if (!chunk.generated) continue;
+            // Проверяем оба свойства: generated (для старой системы) и isLoaded (для FiniteChunkSystem)
+            if (!chunk.generated && !chunk.isLoaded) continue;
 
             // Пропускаем чанки без данных о тайлах
             if (!chunk.tiles) continue;
 
             // Пропускаем чанки, где уже сгенерированы факелы
             if (this.generatedChunks.has(chunkKey)) continue;
-            
+
             const chunkSize = chunk.tiles.length;
-            
+            let torchesCreatedInChunk = 0;
+
             // Проходим по тайлам чанка
             for (let y = 0; y < chunkSize; y++) {
                 for (let x = 0; x < chunkSize; x++) {
                     const tile = chunk.tiles[y][x];
-                    
-                    // Только тайлы с полом (тип 0)
-                    if (tile !== 0) continue;
-                    
+
+                    // Только проходимые тайлы (пол, лёд, декорации)
+                    // Типы: 0-пол, 1-стена, 2-колонна, 3-дерево, 4-скала, 5-вода, 6-лед, 7-декорация
+                    // Факелы ставим только на пол (0) и лёд (6)
+                    if (tile !== 0 && tile !== 6) continue;
+
                     // Случайный шанс спауна
                     if (Math.random() > torchConfig.SPAWN_CHANCE) continue;
 
-                    // Вычисляем мировые координаты
-                    const worldX = chunk.chunkX * chunkSize * tileSize + x * tileSize + tileSize / 2;
-                    const worldY = chunk.chunkY * chunkSize * tileSize + y * tileSize + tileSize / 2;
+                    // Вычисляем мировые координаты тайла
+                    const tileX = chunk.x * chunkSize + x;
+                    const tileY = chunk.y * chunkSize + y;
+                    
+                    // Преобразуем координаты тайлов в экранные координаты через isoTo2D
+                    const screenPos = isoTo2D(tileX, tileY);
+                    const worldX = screenPos.x + tileSize / 2;
+                    const worldY = screenPos.y + tileSize / 2;
 
                     // Максимальное количество попыток для одной позиции
                     const maxAttempts = 3;
@@ -451,14 +460,17 @@ class TorchManager {
 
                         if (!tooClose) {
                             // Успешно — создаём факел и выходим из цикла попыток
-                            this.addTorch(worldX, worldY);
+                            const torch = this.addTorch(worldX, worldY);
+                            if (torch) {
+                                torchesCreatedInChunk++;
+                            }
                             break;
                         }
                         // Если слишком близко — пробуем ещё раз (макс. maxAttempts раз)
                     }
                 }
             }
-            
+
             // Помечаем чанк как обработанный
             this.generatedChunks.add(chunkKey);
         }
