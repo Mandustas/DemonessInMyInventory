@@ -72,7 +72,7 @@ const GAME_CONFIG = {
         // Магический урон: 1.5 за единицу интеллекта
         INTELLIGENCE_MAGIC_DAMAGE_MULTIPLIER: 1.5,
         // Скорость атаки: базовая 1.0 + 2% за ловкость (100 ловкости = 3.0 атак/сек)
-        DEXTERITY_ATTACK_SPEED_MULTIPLIER: 0.02,
+        DEXTERITY_ATTACK_SPEED_MULTIPLIER: 0.04,
         BASE_ATTACK_SPEED: 1.0,       // Базовая скорость атаки (атак в секунду)
         // Шанс крита: 0.5% за ловкость (100 ловкости = 50% крита, макс 50%)
         DEXTERITY_CRITICAL_MULTIPLIER: 0.5,
@@ -86,7 +86,7 @@ const GAME_CONFIG = {
         HITBOX_RADIUS: 16,
 
         // Инвентарь
-        INVENTORY_SIZE: 20
+        INVENTORY_SIZE: 24
     },
     
     // Настройки врагов

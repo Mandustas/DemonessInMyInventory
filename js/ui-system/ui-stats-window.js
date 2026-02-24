@@ -98,20 +98,25 @@ class UIStatsWindow extends UIComponent {
         // === СЕКЦИЯ 2: ОСНОВНЫЕ ХАРАКТЕРИСТИКИ ===
         currentY = this.renderSectionHeader('Основные характеристики:', currentY);
 
-        // Сила (оранжево-красный)
-        currentY = this.renderStatRow('Сила:', this.character.strength, this.colors.strength, currentY);
+        // Сила (оранжево-красный) - с учётом бонусов от экипировки
+        const totalStrength = this.character.getTotalStat('strength');
+        currentY = this.renderStatRow('Сила:', totalStrength, this.colors.strength, currentY);
 
-        // Ловкость (голубой)
-        currentY = this.renderStatRow('Ловкость:', this.character.dexterity, this.colors.dexterity, currentY);
+        // Ловкость (голубой) - с учётом бонусов от экипировки
+        const totalDexterity = this.character.getTotalStat('dexterity');
+        currentY = this.renderStatRow('Ловкость:', totalDexterity, this.colors.dexterity, currentY);
 
-        // Живучесть (зеленый)
-        currentY = this.renderStatRow('Живучесть:', this.character.vitality, this.colors.vitality, currentY);
+        // Живучесть (зеленый) - с учётом бонусов от экипировки
+        const totalVitality = this.character.getTotalStat('vitality');
+        currentY = this.renderStatRow('Живучесть:', totalVitality, this.colors.vitality, currentY);
 
-        // Энергия (синий)
-        currentY = this.renderStatRow('Энергия:', this.character.energy, this.colors.energy, currentY);
+        // Энергия (синий) - с учётом бонусов от экипировки
+        const totalEnergy = this.character.getTotalStat('energy');
+        currentY = this.renderStatRow('Энергия:', totalEnergy, this.colors.energy, currentY);
 
-        // Интеллект (фиолетовый)
-        currentY = this.renderStatRow('Интеллект:', this.character.intelligence, this.colors.intelligence, currentY);
+        // Интеллект (фиолетовый) - с учётом бонусов от экипировки
+        const totalIntelligence = this.character.getTotalStat('intelligence');
+        currentY = this.renderStatRow('Интеллект:', totalIntelligence, this.colors.intelligence, currentY);
 
         // Разделитель
         currentY += 5;

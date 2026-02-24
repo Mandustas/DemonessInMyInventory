@@ -7,21 +7,17 @@ class Character {
         this.width = 32;      // Ширина персонажа
         this.height = 32;     // Высота персонажа
 
-        // Характеристики персонажа
-        this.health = GAME_CONFIG.CHARACTER.INITIAL_HEALTH;
-        this.maxHealth = GAME_CONFIG.CHARACTER.INITIAL_HEALTH;
-        this.mana = GAME_CONFIG.CHARACTER.INITIAL_MANA;       // Мана для использования навыков
-        this.maxMana = GAME_CONFIG.CHARACTER.INITIAL_MANA;    // Максимальная mana
-        this.level = GAME_CONFIG.CHARACTER.INITIAL_LEVEL;
-        this.experience = GAME_CONFIG.CHARACTER.INITIAL_EXPERIENCE;
-        this.experienceForNextLevel = GAME_CONFIG.CHARACTER.EXPERIENCE_PER_LEVEL;
-
         // Основные характеристики
         this.strength = GAME_CONFIG.CHARACTER.INITIAL_STRENGTH;      // Сила - физический урон
         this.dexterity = GAME_CONFIG.CHARACTER.INITIAL_DEXTERITY;    // Ловкость - скорость атаки и крит
         this.vitality = GAME_CONFIG.CHARACTER.INITIAL_VITALITY;      // Живучесть - здоровье
         this.energy = GAME_CONFIG.CHARACTER.INITIAL_ENERGY;          // Энергия - мана и регенерация
         this.intelligence = GAME_CONFIG.CHARACTER.INITIAL_INTELLIGENCE; // Интеллект - магический урон и мана
+
+        // Уровень и опыт
+        this.level = GAME_CONFIG.CHARACTER.INITIAL_LEVEL;
+        this.experience = GAME_CONFIG.CHARACTER.INITIAL_EXPERIENCE;
+        this.experienceForNextLevel = GAME_CONFIG.CHARACTER.EXPERIENCE_PER_LEVEL;
 
         // Слоты экипировки
         this.equipment = {
@@ -55,9 +51,11 @@ class Character {
         // Хитбокс
         this.hitboxRadius = GAME_CONFIG.CHARACTER.HITBOX_RADIUS;
 
-        // Скорость атаки и кулдаун
-        this.attackCooldown = 0;
-        this.updateAttackSpeed();
+        // Инициализация скорости атаки
+        this.maxAttackCooldown = 1000; // Значение по умолчанию
+
+        // Рассчитываем характеристики от статов
+        this.recalculateStats();
 
         // Обновляем изометрические координаты
         this.updateIsoCoords();
@@ -199,64 +197,76 @@ class Character {
     getTotalStat(statName) {
         let baseValue = 0;
 
+        // Сначала вычисляем общие первичные характеристики с бонусами от экипировки
+        const totalStrength = this.getPrimaryStatWithBonuses('strength');
+        const totalDexterity = this.getPrimaryStatWithBonuses('dexterity');
+        const totalVitality = this.getPrimaryStatWithBonuses('vitality');
+        const totalEnergy = this.getPrimaryStatWithBonuses('energy');
+        const totalIntelligence = this.getPrimaryStatWithBonuses('intelligence');
+
         switch(statName) {
             // === ПЕРВИЧНЫЕ ХАРАКТЕРИСТИКИ ===
             case 'strength':
+                return totalStrength;
             case 'dexterity':
+                return totalDexterity;
             case 'vitality':
+                return totalVitality;
             case 'energy':
+                return totalEnergy;
             case 'intelligence':
-                baseValue = this[statName] || 0;
-                break;
+                return totalIntelligence;
 
             // === ЗДОРОВЬЕ И МАНА ===
             case 'health':
             case 'maxHealth':
-                baseValue = this.vitality * GAME_CONFIG.CHARACTER.VITALITY_HP_MULTIPLIER;
+                // Здоровье = живучесть * множитель + бонусы от экипировки
+                baseValue = totalVitality * GAME_CONFIG.CHARACTER.VITALITY_HP_MULTIPLIER;
                 break;
 
             case 'mana':
             case 'maxMana':
-                baseValue = (this.energy * GAME_CONFIG.CHARACTER.ENERGY_MANA_MULTIPLIER) +
-                           (this.intelligence * GAME_CONFIG.CHARACTER.INTELLIGENCE_MANA_MULTIPLIER);
+                // Мана = энергия * множитель + интеллект * множитель + бонусы от экипировки
+                baseValue = (totalEnergy * GAME_CONFIG.CHARACTER.ENERGY_MANA_MULTIPLIER) +
+                           (totalIntelligence * GAME_CONFIG.CHARACTER.INTELLIGENCE_MANA_MULTIPLIER);
                 break;
 
             // === УРОН ===
             case 'physicalDamage':
-                // Физический урон от силы + бонусы от экипировки
-                baseValue = this.strength * GAME_CONFIG.CHARACTER.STRENGTH_PHYSICAL_DAMAGE_MULTIPLIER;
+                // Физический урон = сила * множитель + бонусы от экипировки
+                baseValue = totalStrength * GAME_CONFIG.CHARACTER.STRENGTH_PHYSICAL_DAMAGE_MULTIPLIER;
                 break;
 
             case 'magicDamage':
-                // Магический урон от интеллекта + бонусы от экипировки
-                baseValue = this.intelligence * GAME_CONFIG.CHARACTER.INTELLIGENCE_MAGIC_DAMAGE_MULTIPLIER;
+                // Магический урон = интеллект * множитель + бонусы от экипировки
+                baseValue = totalIntelligence * GAME_CONFIG.CHARACTER.INTELLIGENCE_MAGIC_DAMAGE_MULTIPLIER;
                 break;
 
             // === СКОРОСТЬ АТАКИ ===
             case 'attackSpeed':
-                // Базовая скорость + бонус от ловкости
+                // Скорость атаки = база + ловкость * множитель + бонусы от экипировки
                 baseValue = GAME_CONFIG.CHARACTER.BASE_ATTACK_SPEED +
-                           (this.dexterity * GAME_CONFIG.CHARACTER.DEXTERITY_ATTACK_SPEED_MULTIPLIER);
+                           (totalDexterity * GAME_CONFIG.CHARACTER.DEXTERITY_ATTACK_SPEED_MULTIPLIER);
                 break;
 
             // === ШАНС КРИТА ===
             case 'criticalChance':
-                // Шанс крита от ловкости
-                baseValue = this.dexterity * GAME_CONFIG.CHARACTER.DEXTERITY_CRITICAL_MULTIPLIER;
+                // Шанс крита = ловкость * множитель + бонусы от экипировки
+                baseValue = totalDexterity * GAME_CONFIG.CHARACTER.DEXTERITY_CRITICAL_MULTIPLIER;
                 break;
 
             // === ВОССТАНОВЛЕНИЕ МАНЫ ===
             case 'manaRegen':
-                // Регенерация маны в секунду
+                // Регенерация маны = база + энергия * множитель + интеллект * множитель + бонусы
                 baseValue = GAME_CONFIG.CHARACTER.BASE_MANA_REGEN +
-                           (this.energy * GAME_CONFIG.CHARACTER.ENERGY_MANA_REGEN_MULTIPLIER) +
-                           (this.intelligence * GAME_CONFIG.CHARACTER.INTELLIGENCE_MANA_REGEN_MULTIPLIER);
+                           (totalEnergy * GAME_CONFIG.CHARACTER.ENERGY_MANA_REGEN_MULTIPLIER) +
+                           (totalIntelligence * GAME_CONFIG.CHARACTER.INTELLIGENCE_MANA_REGEN_MULTIPLIER);
                 break;
 
             // === УСТАРЕВШИЕ (для совместимости) ===
             case 'damage':
                 // Возвращаем физический урон для обратной совместимости
-                baseValue = this.strength * GAME_CONFIG.CHARACTER.STRENGTH_PHYSICAL_DAMAGE_MULTIPLIER;
+                baseValue = totalStrength * GAME_CONFIG.CHARACTER.STRENGTH_PHYSICAL_DAMAGE_MULTIPLIER;
                 break;
 
             case 'armor':
@@ -270,7 +280,7 @@ class Character {
                 baseValue = this[statName] || 0;
         }
 
-        // Добавляем бонусы от экипировки
+        // Добавляем бонусы от экипировки для производных характеристик
         for (const slot in this.equipment) {
             const item = this.equipment[slot];
             if (item && item.stats) {
@@ -285,6 +295,10 @@ class Character {
                 if (statName === 'criticalChance' && item.stats.critical) {
                     baseValue += item.stats.critical;
                 }
+                // Маппинг health -> maxHealth (для предметов с бонусом здоровья)
+                if ((statName === 'health' || statName === 'maxHealth') && item.stats.health) {
+                    baseValue += item.stats.health;
+                }
             }
         }
 
@@ -292,6 +306,27 @@ class Character {
         baseValue += this.getSkillsBonusForStat(statName);
 
         return Math.floor(baseValue * 10) / 10; // Округляем до 1 знака
+    }
+
+    /**
+     * Получение первичной характеристики с бонусами от экипировки
+     * @param {string} statName - название первичной характеристики
+     * @returns {number} - общее значение характеристики
+     */
+    getPrimaryStatWithBonuses(statName) {
+        let baseValue = this[statName] || 0;
+
+        // Добавляем бонусы от экипировки
+        for (const slot in this.equipment) {
+            const item = this.equipment[slot];
+            if (item && item.stats) {
+                if (item.stats[statName]) {
+                    baseValue += item.stats[statName];
+                }
+            }
+        }
+
+        return baseValue;
     }
     
     /**
@@ -323,10 +358,9 @@ class Character {
         this.experience -= this.experienceForNextLevel;
         this.experienceForNextLevel = Math.floor(this.experienceForNextLevel * GAME_CONFIG.CHARACTER.EXPERIENCE_MULTIPLIER);
 
-        // Восстанавливаем здоровье и ману при повышении уровня
-        this.maxHealth = this.getTotalStat('maxHealth');
+        // Пересчитываем характеристики и восстанавливаем здоровье и ману
+        this.recalculateStats();
         this.health = this.maxHealth;
-        this.maxMana = this.getTotalStat('maxMana');
         this.mana = this.maxMana;
 
         // Характеристики НЕ увеличиваются от уровня (только от предметов)
@@ -381,9 +415,8 @@ class Character {
      */
     respawn() {
         // Пересчитываем максимальные характеристики от текущих статов
-        this.maxHealth = this.getTotalStat('maxHealth');
-        this.maxMana = this.getTotalStat('maxMana');
-        
+        this.recalculateStats();
+
         // Восстанавливаем здоровье и ману
         this.health = this.maxHealth;
         this.mana = this.maxMana;
@@ -461,26 +494,32 @@ class Character {
      */
     equipItem(item) {
         if (!item || !item.type) return false;
-        
+
         // Проверяем, есть ли такой слот экипировки
         if (this.equipment.hasOwnProperty(item.type)) {
             // Снимаем текущий предмет, если есть
             const previousItem = this.equipment[item.type];
             if (previousItem) {
-                this.addToInventory(previousItem);
+                // Пытаемся добавить предыдущий предмет в инвентарь
+                if (!this.addToInventory(previousItem)) {
+                    // Инвентарь полон, не можем заменить предмет
+                    console.log('Инвентарь полон, нельзя заменить предмет');
+                    return false;
+                }
             }
-            
+
             // Надеваем новый предмет
             this.equipment[item.type] = item;
-            
-            // Обновляем UI
-            this.updateInventoryUI();
+
+            // Пересчитываем характеристики от экипировки
+            this.recalculateStats();
+
             return true;
         }
-        
+
         return false;
     }
-    
+
     /**
      * Снятие предмета
      * @param {string} slot - тип слота (weapon, helmet и т.д.)
@@ -490,11 +529,24 @@ class Character {
         if (this.equipment[slot]) {
             const item = this.equipment[slot];
             this.equipment[slot] = null;
+
+            // Пересчитываем характеристики от экипировки
+            this.recalculateStats();
+
             return item;
         }
         return null;
     }
-    
+
+    /**
+     * Удаление предмета из экипировки (алиас для unequipItem)
+     * @param {string} slot - тип слота
+     * @returns {Item|null} - снятый предмет
+     */
+    removeFromEquipment(slot) {
+        return this.unequipItem(slot);
+    }
+
     /**
      * Добавление предмета в инвентарь
      * @param {Item} item - предмет для добавления
@@ -535,6 +587,11 @@ class Character {
         // В новой системе инвентарь обновляется в отдельном окне
         if (window.game && window.game.uiInventory) {
             window.game.uiInventory.onInventoryUpdate();
+        }
+        
+        // Также обновляем окно характеристик если оно открыто
+        if (window.game && window.game.uiStatsWindow && window.game.uiStatsWindow.isOpen) {
+            window.game.uiStatsWindow.onStatsUpdate();
         }
     }
 
@@ -829,6 +886,45 @@ class Character {
     getManaRegenRate() {
         // Базовое восстановление + бонусы от энергии и интеллекта
         return this.getTotalStat('manaRegen');
+    }
+
+    /**
+     * Пересчёт характеристик от экипировки
+     * Вызывается при надевании/снятии предмета
+     */
+    recalculateStats() {
+        // Пересчитываем максимальные характеристики
+        const newMaxHealth = this.getTotalStat('maxHealth');
+        const newMaxMana = this.getTotalStat('maxMana');
+
+        // Сохраняем процент здоровья и маны, чтобы не терять прогресс
+        // Если maxHealth/maxMana ещё не установлены (первый вызов), используем 0
+        const healthPercent = this.maxHealth > 0 ? this.health / this.maxHealth : 1;
+        const manaPercent = this.maxMana > 0 ? this.mana / this.maxMana : 1;
+
+        // Обновляем максимумы
+        this.maxHealth = newMaxHealth;
+        this.maxMana = newMaxMana;
+
+        // Обновляем текущие значения с сохранением процента
+        // При первом вызове просто устанавливаем максимумы
+        if (this.maxHealth > 0 && this.health === 0) {
+            this.health = this.maxHealth;
+        } else if (this.maxHealth > 0) {
+            this.health = Math.floor(newMaxHealth * healthPercent);
+        }
+
+        if (this.maxMana > 0 && this.mana === 0) {
+            this.mana = this.maxMana;
+        } else if (this.maxMana > 0) {
+            this.mana = Math.floor(newMaxMana * manaPercent);
+        }
+
+        // Обновляем скорость атаки
+        this.updateAttackSpeed();
+        
+        // Обновляем UI
+        this.updateInventoryUI();
     }
 
     /**

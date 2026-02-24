@@ -32,6 +32,9 @@ class ItemDropSprite extends PIXI.Container {
             corner: 0xd4af37
         };
 
+        // Флаг последнего состояния hover для оптимизации
+        this.lastHoverState = false;
+
         // Создаём визуальные элементы предмета
         this.createVisuals();
 
@@ -46,17 +49,11 @@ class ItemDropSprite extends PIXI.Container {
         const width = this.baseWidth;
         const height = this.baseHeight;
 
-        // Фон предмета (тёмный, полупрозрачный)
-        this.background = new PIXI.Graphics();
-        this.background.eventMode = 'none'; // Не перехватывает события
-        this.drawBackground();
-        this.addChild(this.background);
-
-        // Рамка предмета (статичная, не меняет цвет)
-        this.border = new PIXI.Graphics();
-        this.border.eventMode = 'none'; // Не перехватывает события
-        this.drawBorder();
-        this.addChild(this.border);
+        // Создаём текстуру предмета один раз и используем Sprite вместо Graphics
+        this.sprite = this.createItemTexture();
+        this.sprite.anchor.set(0.5, 0.5);
+        this.sprite.eventMode = 'none';
+        this.addChild(this.sprite);
 
         // Название предмета в стиле Diablo
         this.textStyle = new PIXI.TextStyle({
@@ -73,57 +70,46 @@ class ItemDropSprite extends PIXI.Container {
 
         this.textLabel = new PIXI.Text(this.drop.item.name, this.textStyle);
         this.textLabel.anchor.set(0.5, 0.5);
-        this.textLabel.eventMode = 'none'; // Не перехватывает события
+        this.textLabel.eventMode = 'none';
+        this.textLabel.y = -2; // Чуть выше центра
         this.addChild(this.textLabel);
-
-        // Применяем начальное состояние
-        this.updateVisuals();
     }
 
     /**
-     * Отрисовка фона предмета
+     * Создание текстуры предмета с кэшированием
      */
-    drawBackground() {
+    createItemTexture() {
         const width = this.baseWidth;
         const height = this.baseHeight;
+        const graphics = new PIXI.Graphics();
 
-        this.background.clear();
-        // Тёмный полупрозрачный фон, при наведении слегка светлеет
-        const bgColor = this.isHovered ? this.colors.backgroundHover : this.colors.background;
-        const bgAlpha = this.isHovered ? 0.7 : 0.5;
-        this.background.beginFill(bgColor, bgAlpha);
-        this.background.drawRect(-width / 2, -height / 2, width, height);
-        this.background.endFill();
-    }
+        // Фон
+        const bgColor = this.colors.background;
+        const bgAlpha = 0.5;
+        graphics.beginFill(bgColor, bgAlpha);
+        graphics.drawRect(-width / 2, -height / 2, width, height);
+        graphics.endFill();
 
-    /**
-     * Отрисовка рамки предмета (статичная, не меняется)
-     */
-    drawBorder() {
-        const width = this.baseWidth;
-        const height = this.baseHeight;
+        // Рамка
+        graphics.lineStyle(2, this.colors.border, 1);
+        graphics.drawRect(-width / 2, -height / 2, width, height);
+        graphics.lineStyle(1, this.colors.borderInner, 0.6);
+        graphics.drawRect(-width / 2 + 3, -height / 2 + 3, width - 6, height - 6);
 
-        this.border.clear();
-        
-        // Внешняя тёмная рамка
-        this.border.lineStyle(2, this.colors.border, 1);
-        this.border.drawRect(-width / 2, -height / 2, width, height);
-        
-        // Внутренняя золотая рамка (тонкая)
-        this.border.lineStyle(1, this.colors.borderInner, 0.6);
-        this.border.drawRect(-width / 2 + 3, -height / 2 + 3, width - 6, height - 6);
-        
         // Угловые украшения
-        this.drawCorners(this.border, width, height);
+        this.drawCornersStatic(graphics, width, height);
+
+        // Генерируем текстуру
+        const texture = this.pixiRenderer.app.renderer.generateTexture(graphics);
+        graphics.destroy();
+
+        return new PIXI.Sprite(texture);
     }
 
     /**
-     * Отрисовка угловых украшений
-     * @param {PIXI.Graphics} graphics - графика для рисования
-     * @param {number} width - ширина рамки
-     * @param {number} height - высота рамки
+     * Отрисовка угловых украшений для текстуры
      */
-    drawCorners(graphics, width, height) {
+    drawCornersStatic(graphics, width, height) {
         const cornerSize = 5;
         const color = this.colors.corner;
         const halfW = width / 2;
@@ -188,31 +174,52 @@ class ItemDropSprite extends PIXI.Container {
      * Обновление визуального состояния
      */
     updateVisuals() {
-        // Проверяем, что графические элементы и предмет существуют
-        if (!this.background || !this.textStyle || !this.textLabel || !this.border || !this.drop || !this.drop.item || !this.visible) {
+        // Оптимизация: обновляем только при изменении hover состояния
+        if (this.lastHoverState === this.isHovered) {
             return;
         }
 
-        // Обновляем фон (прозрачный бекграунд слегка меняет цвет при наведении)
-        this.background.clear();
+        this.lastHoverState = this.isHovered;
+
+        // Проверяем, что спрайт и предмет существуют
+        if (!this.sprite || !this.drop || !this.drop.item) {
+            return;
+        }
+
+        // Уничтожаем старую текстуру и создаём новую с обновлённым фоном
+        const oldTexture = this.sprite.texture;
+
+        const width = this.baseWidth;
+        const height = this.baseHeight;
+        const graphics = new PIXI.Graphics();
+
+        // Фон (меняет прозрачность при наведении)
         const bgColor = this.isHovered ? this.colors.backgroundHover : this.colors.background;
         const bgAlpha = this.isHovered ? 0.7 : 0.5;
-        this.background.beginFill(bgColor, bgAlpha);
-        this.background.drawRect(-this.baseWidth / 2, -this.baseHeight / 2, this.baseWidth, this.baseHeight);
-        this.background.endFill();
+        graphics.beginFill(bgColor, bgAlpha);
+        graphics.drawRect(-width / 2, -height / 2, width, height);
+        graphics.endFill();
 
-        // Перерисовываем рамку (статичная, не меняет цвет)
-        this.border.clear();
-        this.border.lineStyle(2, this.colors.border, 1);
-        this.border.drawRect(-this.baseWidth / 2, -this.baseHeight / 2, this.baseWidth, this.baseHeight);
-        this.border.lineStyle(1, this.colors.borderInner, 0.6);
-        this.border.drawRect(-this.baseWidth / 2 + 3, -this.baseHeight / 2 + 3, this.baseWidth - 6, this.baseHeight - 6);
-        this.drawCorners(this.border, this.baseWidth, this.baseHeight);
+        // Рамка (статичная)
+        graphics.lineStyle(2, this.colors.border, 1);
+        graphics.drawRect(-width / 2, -height / 2, width, height);
+        graphics.lineStyle(1, this.colors.borderInner, 0.6);
+        graphics.drawRect(-width / 2 + 3, -height / 2 + 3, width - 6, height - 6);
 
-        // Обновляем цвет текста в зависимости от редкости (НЕ меняется при наведении)
-        const textColor = this.drop.item.getColorByRarity();
-        this.textStyle.fill = textColor;
-        this.textLabel.style = this.textStyle;
+        // Угловые украшения
+        this.drawCornersStatic(graphics, width, height);
+
+        // Генерируем новую текстуру
+        const newTexture = this.pixiRenderer.app.renderer.generateTexture(graphics);
+        graphics.destroy();
+
+        // Применяем новую текстуру
+        this.sprite.texture = newTexture;
+
+        // Уничтожаем старую текстуру для освобождения памяти
+        if (oldTexture && oldTexture !== PIXI.Texture.EMPTY) {
+            oldTexture.destroy(true);
+        }
     }
 
     /**
@@ -265,13 +272,13 @@ class ItemDropSprite extends PIXI.Container {
      * Очистка и уничтожение спрайта
      */
     destroy() {
-        if (this.background) {
-            this.background.destroy();
-            this.background = null;
-        }
-        if (this.border) {
-            this.border.destroy();
-            this.border = null;
+        if (this.sprite) {
+            // Уничтожаем текстуру для освобождения памяти
+            if (this.sprite.texture && this.sprite.texture !== PIXI.Texture.EMPTY) {
+                this.sprite.texture.destroy(true);
+            }
+            this.sprite.destroy();
+            this.sprite = null;
         }
         if (this.textLabel) {
             this.textLabel.destroy();
@@ -298,14 +305,59 @@ class ItemDropSprite extends PIXI.Container {
     reuse(drop) {
         this.drop = drop;
         this.isHovered = false;
+        this.lastHoverState = false;
         this.visible = true;
 
-        // Обновляем текст
+        // Обновляем текст и его цвет для нового предмета
         if (this.textLabel && drop.item) {
             this.textLabel.text = drop.item.name;
+            const textColor = drop.item.getColorByRarity();
+            this.textStyle.fill = textColor;
+            this.textLabel.style = this.textStyle;
         }
 
-        this.updateVisuals();
+        // Пересоздаём текстуру для нового предмета
+        this.refreshTexture();
+    }
+
+    /**
+     * Пересоздание текстуры (для reuse)
+     */
+    refreshTexture() {
+        if (!this.sprite || !this.drop || !this.drop.item) return;
+
+        const oldTexture = this.sprite.texture;
+
+        const width = this.baseWidth;
+        const height = this.baseHeight;
+        const graphics = new PIXI.Graphics();
+
+        // Фон
+        const bgColor = this.colors.background;
+        const bgAlpha = 0.5;
+        graphics.beginFill(bgColor, bgAlpha);
+        graphics.drawRect(-width / 2, -height / 2, width, height);
+        graphics.endFill();
+
+        // Рамка
+        graphics.lineStyle(2, this.colors.border, 1);
+        graphics.drawRect(-width / 2, -height / 2, width, height);
+        graphics.lineStyle(1, this.colors.borderInner, 0.6);
+        graphics.drawRect(-width / 2 + 3, -height / 2 + 3, width - 6, height - 6);
+
+        // Угловые украшения
+        this.drawCornersStatic(graphics, width, height);
+
+        // Генерируем новую текстуру
+        const newTexture = this.pixiRenderer.app.renderer.generateTexture(graphics);
+        graphics.destroy();
+
+        this.sprite.texture = newTexture;
+
+        // Уничтожаем старую текстуру
+        if (oldTexture && oldTexture !== PIXI.Texture.EMPTY) {
+            oldTexture.destroy(true);
+        }
     }
 }
 

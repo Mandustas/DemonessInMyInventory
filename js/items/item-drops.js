@@ -14,7 +14,7 @@ class ItemDrop {
         this.width = 60;
         this.height = 20;
         this.pickupRadius = 5; // Радиус, в котором можно подобрать предмет
-        this.lifetime = 300; // Время жизни предмета в тиках (5 секунд при 60 FPS)
+        this.lifetime = 3600; // Время жизни предмета в тиках (60 секунд при 60 FPS)
         this.age = 0;
         this.pickedUp = false;
 

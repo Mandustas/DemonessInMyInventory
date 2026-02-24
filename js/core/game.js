@@ -467,6 +467,18 @@ class Game {
                 }
             });
         }
+
+        // Обработчик отладочной кнопки генерации предметов
+        const debugDropItemsBtn = document.getElementById('debugDropItemsBtn');
+        if (debugDropItemsBtn) {
+            debugDropItemsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.gameState === 'playing' && this.character) {
+                    this.spawnRandomItemsNearCharacter(5);
+                    console.log('[Debug] Создано 5 случайных предметов рядом с персонажем');
+                }
+            });
+        }
     }
 
     /**
@@ -618,6 +630,38 @@ class Game {
         this.projectileManager.addProjectile(fireball);
 
         console.log(`Запущен Огненный шар в направлении (${targetX.toFixed(0)}, ${targetY.toFixed(0)})`);
+    }
+
+    /**
+     * Генерация случайных предметов рядом с персонажем
+     * @param {number} count - количество предметов для генерации
+     */
+    spawnRandomItemsNearCharacter(count) {
+        if (!this.character || !this.itemDropSystem) {
+            return;
+        }
+
+        const dropX = this.character.x;
+        const dropY = this.character.y;
+        const spreadRadius = 80;
+
+        for (let i = 0; i < count; i++) {
+            const item = generateRandomItem(this.character.level);
+
+            const angle = Math.random() * Math.PI * 2;
+            const distance = Math.random() * spreadRadius;
+            const offsetX = Math.cos(angle) * distance;
+            const offsetY = Math.sin(angle) * distance;
+
+            const itemX = dropX + offsetX;
+            const itemY = dropY + offsetY;
+
+            this.itemDropSystem.createItemDrop(item, itemX, itemY);
+        }
+
+        if (this.uiInventory && this.uiInventory.isOpen) {
+            this.uiInventory.onInventoryUpdate();
+        }
     }
 
     /**

@@ -30,9 +30,11 @@ class Enemy {
         this.mana = this.maxMana;
         
         this.attackCooldown = 0;
-        // Скорость атаки зависит от типа: ASSASSIN быстрее, TANK медленнее
-        const attackSpeedMultiplier = type === 'ASSASSIN' ? 1.5 : (type === 'TANK' ? 0.7 : 1.0);
-        this.maxAttackCooldown = GAME_CONFIG.ENEMY.ATTACK_COOLDOWN / attackSpeedMultiplier;
+        // Скорость атаки рассчитывается от ловкости: база 1.0 + 0.02 за каждую единицу
+        // ASSASSIN имеет больше ловкости, поэтому атакует быстрее
+        const attackSpeed = this.getTotalStat('attackSpeed');
+        // attackSpeed - это атак в секунду, значит кулдаун = 1000 / attackSpeed мс
+        this.maxAttackCooldown = 1000 / attackSpeed;
 
         // Хитбокс
         this.hitboxRadius = GAME_CONFIG.ENEMY.HITBOX_RADIUS;

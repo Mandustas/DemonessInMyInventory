@@ -4040,12 +4040,10 @@ class PIXIRenderer {
             }
 
             // Вычисляем мировые координаты с учётом зума
-            // mainContainer уже имеет смещение камеры, поэтому используем только мировые координаты
             const worldX = drop.displayX;
             const worldY = drop.displayY;
 
             // Проверяем, находится ли предмет в пределах видимой области (culling)
-            // Преобразуем мировые координаты в экранные для проверки
             const screenX = this.app.screen.width / 2 + (worldX - this.camera.x) * zoom;
             const screenY = this.app.screen.height / 2 + (worldY - this.camera.y) * zoom;
 
@@ -4062,18 +4060,24 @@ class PIXIRenderer {
                 this.activeItemSprites.set(drop, sprite);
             }
 
-            // Обновляем состояние hover
-            sprite.isHovered = (hoveredDrop === drop);
-            sprite.updateVisuals();
+            // Обновляем состояние hover ТОЛЬКО если изменилось
+            const newHoverState = (hoveredDrop === drop);
+            if (sprite.isHovered !== newHoverState) {
+                sprite.isHovered = newHoverState;
+                sprite.updateVisuals();
+            }
 
-            // Обновляем позицию спрайта в мировых координатах с учётом зума
+            // Обновляем позицию спрайта
             sprite.updatePosition(worldX, worldY, zoom);
         }
 
-        // Сортируем предметы по Y для правильного наложения
-        this.itemLayer.sortableChildren = true;
-        for (const [drop, sprite] of this.activeItemSprites.entries()) {
-            sprite.zIndex = Math.floor(sprite.y);
+        // Оптимизация: отключаем сортировку если предметов мало или они не перекрываются
+        // Сортировка включается только когда предметы реально накладываются друг на друга
+        if (this.activeItemSprites.size > 5) {
+            this.itemLayer.sortableChildren = true;
+            for (const [drop, sprite] of this.activeItemSprites.entries()) {
+                sprite.zIndex = Math.floor(sprite.y);
+            }
         }
     }
 

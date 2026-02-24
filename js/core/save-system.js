@@ -174,13 +174,16 @@ class SaveSystem {
         character.energy = data.energy;
         character.skillPoints = data.skillPoints;
         character.skills = data.skills;
-        
+
         // Восстанавливаем экипировку
         character.equipment = this.deserializeEquipment(data.equipment);
-        
+
         // Восстанавливаем инвентарь
         character.inventory = this.deserializeInventory(data.inventory);
-        
+
+        // Пересчитываем характеристики от экипировки
+        character.recalculateStats();
+
         // Обновляем изометрические координаты
         character.updateIsoCoords();
     }
