@@ -862,9 +862,25 @@ class Game {
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance > GAME_CONFIG.MOVEMENT.MIN_DISTANCE_TO_TARGET) { // Если расстояние больше 5 пикселей
-            const speed = GAME_CONFIG.PLAYER_SPEED; // Скорость перемещения (увеличена в 2 раза)
-            const moveX = (dx / distance) * speed;
-            const moveY = (dy / distance) * speed;
+            // Получаем текущую позицию персонажа в тайлах для замедления
+            let currentTilePos;
+            if (typeof getTileIndex !== 'undefined') {
+                currentTilePos = getTileIndex(this.character.x, this.character.y);
+            } else {
+                currentTilePos = { 
+                    tileX: Math.floor(this.character.x / GAME_CONFIG.TILE_DIMENSIONS.WIDTH), 
+                    tileY: Math.floor(this.character.y / GAME_CONFIG.TILE_DIMENSIONS.HEIGHT) 
+                };
+            }
+            
+            // Получаем множитель скорости для текущего тайла (замедление от ландшафта)
+            const speedMultiplier = this.chunkSystem.getSpeedMultiplier(currentTilePos.tileX, currentTilePos.tileY);
+            
+            const baseSpeed = GAME_CONFIG.PLAYER_SPEED; // Базовая скорость
+            const adjustedSpeed = baseSpeed * speedMultiplier; // Применяем замедление
+            
+            const moveX = (dx / distance) * adjustedSpeed;
+            const moveY = (dy / distance) * adjustedSpeed;
 
             // Проверяем, можно ли двигаться в направлении цели
             const nextX = this.character.x + moveX;
@@ -879,11 +895,7 @@ class Game {
 
             // Проверяем коллизии с врагами перед перемещением
             if (this.isPassable(tilePos.tileX, tilePos.tileY) && !this.checkCharacterEnemyCollision(nextX, nextY)) {
-                // Получаем множитель скорости для текущего тайла
-                const speedMultiplier = this.chunkSystem.getSpeedMultiplier(tilePos.tileX, tilePos.tileY);
-                const adjustedMoveX = moveX * speedMultiplier;
-                const adjustedMoveY = moveY * speedMultiplier;
-                this.character.move(adjustedMoveX, adjustedMoveY);
+                this.character.move(moveX, moveY);
             }
         }
     }
@@ -1236,7 +1248,15 @@ class Game {
 
         // Обработка движения персонажа с клавиатуры
         // PLAYER_SPEED теперь в пикселях в секунду, конвертируем в пиксели за deltaTime
-        const speedPerFrame = GAME_CONFIG.PLAYER_SPEED * (deltaTime / 1000);
+        const baseSpeedPerFrame = GAME_CONFIG.PLAYER_SPEED * (deltaTime / 1000);
+        
+        // Получаем текущую позицию персонажа в тайлах
+        const currentTilePos = getTileIndex(this.character.x, this.character.y);
+        // Получаем множитель скорости для текущего тайла (замедление от ландшафта)
+        const speedMultiplier = this.chunkSystem.getSpeedMultiplier(currentTilePos.tileX, currentTilePos.tileY);
+        // Применяем замедление к скорости
+        const speedPerFrame = baseSpeedPerFrame * speedMultiplier;
+        
         let targetX = this.character.x;
         let targetY = this.character.y;
 
@@ -1245,15 +1265,11 @@ class Game {
         if (this.keys['a'] || this.keys['ф']) targetX -= speedPerFrame;
         if (this.keys['d'] || this.keys['в']) targetX += speedPerFrame;
 
-        // Двигаем персонажа только если есть ввод
+        // Двигаем персонажа только если есть ввод и целевая позиция проходима
         if (targetX !== this.character.x || targetY !== this.character.y) {
-            let tilePos = getTileIndex(targetX, targetY);
-            if (this.isPassable(tilePos.tileX, tilePos.tileY)) {
-                // Получаем множитель скорости для текущего тайла
-                const speedMultiplier = this.chunkSystem.getSpeedMultiplier(tilePos.tileX, tilePos.tileY);
-                const adjustedMoveX = (targetX - this.character.x) * speedMultiplier;
-                const adjustedMoveY = (targetY - this.character.y) * speedMultiplier;
-                this.character.move(adjustedMoveX, adjustedMoveY);
+            let nextTilePos = getTileIndex(targetX, targetY);
+            if (this.isPassable(nextTilePos.tileX, nextTilePos.tileY)) {
+                this.character.move(targetX - this.character.x, targetY - this.character.y);
             }
         }
 
@@ -1261,14 +1277,14 @@ class Game {
         this.renderer.centerCameraOnCharacter(this.character);
 
         // Загружаем новые чанки только при переходе в новый чанк
-        const currentTilePos = getTileIndex(this.character.x, this.character.y);
-        const currentChunkX = Math.floor(currentTilePos.tileX / this.chunkSystem.chunkSize);
-        const currentChunkY = Math.floor(currentTilePos.tileY / this.chunkSystem.chunkSize);
+        const charTilePos = getTileIndex(this.character.x, this.character.y);
+        const currentChunkX = Math.floor(charTilePos.tileX / this.chunkSystem.chunkSize);
+        const currentChunkY = Math.floor(charTilePos.tileY / this.chunkSystem.chunkSize);
 
         if (this.lastChunkX !== currentChunkX || this.lastChunkY !== currentChunkY) {
             this.lastChunkX = currentChunkX;
             this.lastChunkY = currentChunkY;
-            this.chunkSystem.loadChunksAround(currentTilePos.tileX, currentTilePos.tileY);
+            this.chunkSystem.loadChunksAround(charTilePos.tileX, charTilePos.tileY);
 
             // Генерируем факелы в новых чанках
             if (this.torchManager) {

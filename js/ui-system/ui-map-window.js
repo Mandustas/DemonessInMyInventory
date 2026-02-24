@@ -301,10 +301,16 @@ class UIMapWindow extends UIComponent {
 
     /**
      * Преобразование координат тайла в изометрические координаты карты
+     * @param {number} tileX - X координата тайла
+     * @param {number} tileY - Y координата тайла
+     * @returns {{x: number, y: number}} - Изометрические координаты для отрисовки
      */
     tileToMapIso(tileX, tileY) {
+        // Преобразуем координаты тайла в изометрические координаты для миникарты
+        // Используем те же координаты, что и основной рендерер (без центрирования)
         const isoX = (tileX - tileY) * this.tileScale;
         const isoY = (tileX + tileY) * this.tileScale * 0.5;
+        
         return { x: isoX, y: isoY };
     }
 

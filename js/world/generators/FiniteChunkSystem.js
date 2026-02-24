@@ -266,8 +266,9 @@ class FiniteChunkSystem {
      */
     isTilePassable(worldX, worldY) {
         const tile = this.getTileAt(worldX, worldY);
-        // 0 - пол, 6 - лёд, 7 - декорации - проходимые
-        return tile === 0 || tile === 6 || tile === 7;
+        // Все тайлы проходимы кроме стен (1) и колонн (2)
+        // Типы: 0-пол, 1-стена, 2-колонна, 3-дерево, 4-скала, 5-вода, 6-лед, 7-декорация
+        return tile !== 1 && tile !== 2;
     }
 
     /**
@@ -395,13 +396,19 @@ class FiniteChunkSystem {
      */
     getSpeedMultiplier(tileX, tileY) {
         const tileType = this.getTileType(tileX, tileY);
-        
-        // Лёд замедляет
-        if (tileType === 6) {
-            return 0.7;
+
+        switch (tileType) {
+            case 3: // Дерево - медленнее на 40%
+                return 0.6;
+            case 4: // Скала - медленнее на 50%
+                return 0.5;
+            case 5: // Вода - медленнее на 60%
+                return 0.4;
+            case 6: // Лёд - быстрее на 30%
+                return 1.3;
+            default:
+                return 1.0;
         }
-        
-        return 1.0;
     }
 
     /**

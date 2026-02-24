@@ -1401,10 +1401,10 @@ class PIXIRenderer {
                 const tileType = chunk.tiles[y][x];
 
                 // Преобразуем локальные координаты тайла в 2D координаты
-                // Добавляем смещение +0.5 для центрирования тайла в изометрической проекции
+                // НЕ добавляем смещение +0.5, так как персонаж и объекты используют координаты без центрирования
                 const globalX = chunk.chunkX * chunk.size + x;
                 const globalY = chunk.chunkY * chunk.size + y;
-                const pos = this.isoTo2D(globalX + 0.5, globalY + 0.5);
+                const pos = this.isoTo2D(globalX, globalY);
 
                 // Получаем текстуру через ленивую загрузку
                 const texture = this.getTileTexture(tileType);
@@ -1432,6 +1432,12 @@ class PIXIRenderer {
                 const scaleX = tileSize / textureWidth;
                 const scaleY = (tileSize / 2) / textureHeight;
                 sprite.scale.set(scaleX, scaleY);
+
+                // Устанавливаем anchor в центре по горизонтали и вверху по вертикали
+                // Это необходимо, потому что текстура тайла рисуется с верхним углом ромба в (0, 0),
+                // но bounding box текстуры начинается с -tileSize/2 (левый угол ромба)
+                // Без правильного anchor спрайт был бы смещён на полтайла вправо
+                sprite.anchor.set(0.5, 0);
 
                 // Устанавливаем позицию
                 sprite.x = pos.x;
@@ -2069,6 +2075,10 @@ class PIXIRenderer {
         const scaleY = (tileSize / 2) / textureHeight;
         sprite.scale.set(scaleX, scaleY);
 
+        // Устанавливаем anchor в центре по горизонтали и вверху по вертикали
+        // Это необходимо для правильного позиционирования изометрического тайла
+        sprite.anchor.set(0.5, 0);
+
         // Устанавливаем позицию
         sprite.x = x;
         sprite.y = y;
@@ -2109,6 +2119,9 @@ class PIXIRenderer {
         const scaleY = (tileSize / 2) / textureHeight;
         sprite.scale.set(scaleX, scaleY);
 
+        // Устанавливаем anchor в центре по горизонтали и вверху по вертикали
+        sprite.anchor.set(0.5, 0);
+
         // Устанавливаем позицию
         sprite.x = x;
         sprite.y = y;
@@ -2147,6 +2160,9 @@ class PIXIRenderer {
         const scaleX = tileSize / textureWidth;
         const scaleY = (tileSize / 2) / textureHeight;
         sprite.scale.set(scaleX, scaleY);
+
+        // Устанавливаем anchor в центре по горизонтали и вверху по вертикали
+        sprite.anchor.set(0.5, 0);
 
         // Устанавливаем позицию
         sprite.x = x;
@@ -3805,10 +3821,10 @@ class PIXIRenderer {
                             const tileType = chunk.tiles[y][x];
 
                             // Преобразуем глобальные координаты тайла в 2D координаты
-                            // Добавляем смещение +0.5 для центрирования тайла в изометрической проекции
+                            // НЕ добавляем смещение +0.5, так как персонаж и объекты используют координаты без центрирования
                             const globalX = chunk.chunkX * chunk.size + x;
                             const globalY = chunk.chunkY * chunk.size + y;
-                            const pos = this.isoTo2D(globalX + 0.5, globalY + 0.5);
+                            const pos = this.isoTo2D(globalX, globalY);
 
                             // Проверяем, находится ли тайл в пределах экрана
                             // Преобразуем мировые координаты в экранные для проверки видимости
