@@ -385,6 +385,40 @@ const GAME_CONFIG = {
         RENDER_RADIUS_EXTRA: 2
     },
     
+    // Настройки карты ограниченного размера
+    MAP: {
+        WIDTH: 256,              // Ширина карты в тайлах
+        HEIGHT: 256,             // Высота карты в тайлах
+        DEFAULT_TYPE: 'forest',  // Тип карты по умолчанию (если не выбран случайно)
+        RANDOM_TYPE_ON_START: true, // Выбирать случайный тип карты при старте
+        
+        // Доступные типы карт
+        TYPES: {
+            forest: {
+                name: 'Тёмный лес',
+                enemyTypes: ['TANK', 'ASSASSIN'],
+                description: 'Тёмный лес с густой растительностью'
+            },
+            desert: {
+                name: 'Пустыня',
+                enemyTypes: ['MAGE', 'ASSASSIN'],
+                description: 'Песчаные дюны и скалы'
+            },
+            cave: {
+                name: 'Пещера',
+                enemyTypes: ['TANK', 'MAGE'],
+                description: 'Тёмные пещеры с сталактитами'
+            }
+        },
+        
+        // Настройки спавна врагов
+        ENEMY_SPAWN: {
+            ENEMIES_PER_ROOM: 2,      // Врагов на комнату
+            MIN_DISTANCE_FROM_PLAYER: 10, // Минимальное расстояние от игрока
+            MAX_ENEMIES_TOTAL: 100    // Максимальное количество врагов на карте
+        }
+    },
+    
     // Дополнительные настройки тайлов
     TILE_DIMENSIONS: {
         WIDTH: 64,

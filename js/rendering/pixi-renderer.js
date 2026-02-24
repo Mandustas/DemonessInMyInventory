@@ -1404,7 +1404,7 @@ class PIXIRenderer {
                 // Добавляем смещение +0.5 для центрирования тайла в изометрической проекции
                 const globalX = chunk.chunkX * chunk.size + x;
                 const globalY = chunk.chunkY * chunk.size + y;
-                const pos = this.isoTo2D(globalX - 1, globalY);
+                const pos = this.isoTo2D(globalX + 0.5, globalY + 0.5);
 
                 // Получаем текстуру через ленивую загрузку
                 const texture = this.getTileTexture(tileType);
@@ -1905,7 +1905,7 @@ class PIXIRenderer {
     renderTiles(map, chunkSystem = null) {
         // Очищаем предыдущие тайлы - removeChildren удаляет детей из контейнера, но не уничтожает их
         this.tileLayer.removeChildren();
-        
+
         let chunksRenderedCount = 0;
 
         if (chunkSystem) {
@@ -1931,18 +1931,8 @@ class PIXIRenderer {
                     const chunkContainer = this.getCachedChunk(chunk);
                     chunksRenderedCount++;
 
-                    // Проверяем, что чанк имеет детей (тайлы)
-                    if (chunkContainer.children.length === 0) {
-                        // Если чанк пустой, пересоздаем его
-                        const chunkKey = `${chunk.chunkX},${chunk.chunkY}`;
-                        this.chunkCache.delete(chunkKey);
-                        const newChunkContainer = this.createChunkContainer(chunk);
-                        this.chunkCache.set(chunkKey, newChunkContainer);
-                        this.tileLayer.addChild(newChunkContainer);
-                    } else {
-                        // Добавляем контейнер чанка к слою тайлов
-                        this.tileLayer.addChild(chunkContainer);
-                    }
+                    // Добавляем контейнер чанка к слою тайлов
+                    this.tileLayer.addChild(chunkContainer);
                 }
             }
         } else {

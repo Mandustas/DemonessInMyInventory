@@ -445,13 +445,12 @@ class UIMapWindow extends UIComponent {
     collectMapData() {
         const chunkSystem = this.game.chunkSystem;
 
-        // Проходим по всем активным чанкам
-        for (const chunkKey of chunkSystem.activeChunks) {
-            const chunk = chunkSystem.chunks.get(chunkKey);
-            if (!chunk || !chunk.tiles || !chunk.generated) continue;
+        // Проходим по всем загруженным чанкам (используем chunks вместо activeChunks)
+        for (const [chunkKey, chunk] of chunkSystem.chunks) {
+            if (!chunk || !chunk.tiles) continue;
 
             const [chunkX, chunkY] = chunkKey.split(',').map(Number);
-            const tilesPerChunk = chunkSystem.chunkSize;
+            const tilesPerChunk = chunk.size || chunkSystem.chunkSize;
 
             for (let y = 0; y < tilesPerChunk; y++) {
                 for (let x = 0; x < tilesPerChunk; x++) {
@@ -478,20 +477,35 @@ class UIMapWindow extends UIComponent {
     renderMapTiles() {
         const fogOfWar = this.game.fogOfWar;
         const fogEnabled = GAME_CONFIG.FOG_OF_WAR.ENABLED && fogOfWar;
-        
+
         // Очищаем графику и список отрисованных тайлов
         this.mapGraphics.clear();
         this.renderedTiles.clear();
-        
+
+        // Отладка: подсчитываем количество тайлов
+        let totalTiles = 0;
+        let exploredTiles = 0;
+        let visibleTiles = 0;
+        let skippedTiles = 0;
+
         // Рисуем все известные тайлы
         for (const [key, tileType] of this.mapData) {
             const [tileX, tileY] = key.split(',').map(Number);
+            totalTiles++;
 
             // Проверяем туман войны
             if (fogEnabled) {
                 // Неисследованный тайл - не отображаем вообще
-                if (!fogOfWar.isTileExplored(tileX, tileY)) {
+                // НО: если туман войны еще пуст (игра только началась), отображаем все тайлы
+                if (fogOfWar.explored.size > 0 && !fogOfWar.isTileExplored(tileX, tileY)) {
+                    skippedTiles++;
                     continue;
+                }
+                exploredTiles++;
+
+                // Проверяем видимость
+                if (fogOfWar.isTileVisible(tileX, tileY)) {
+                    visibleTiles++;
                 }
             }
 
@@ -502,7 +516,7 @@ class UIMapWindow extends UIComponent {
             let color = this.tileColors[tileType] || this.tileColors[0];
 
             // Если тайл исследован но не виден - затемняем оригинальный цвет
-            if (fogEnabled && !fogOfWar.isTileVisible(tileX, tileY)) {
+            if (fogEnabled && fogOfWar.explored.size > 0 && !fogOfWar.isTileVisible(tileX, tileY)) {
                 // Затемняем до 40% от оригинала (сохраняем рельеф)
                 color = this.darkenColor(color, 0.4);
             }
@@ -511,10 +525,13 @@ class UIMapWindow extends UIComponent {
             this.mapGraphics.beginFill(color);
             this.drawIsoTile(this.mapGraphics, pos.x, pos.y, this.tileScale * 0.9);
             this.mapGraphics.endFill();
-            
+
             // Отмечаем тайл как отрисованный
             this.renderedTiles.add(key);
         }
+
+        // Отладочная информация в консоль
+        console.log(`[UIMapWindow] Отрисовано тайлов: ${totalTiles}, исследовано: ${exploredTiles}, видно: ${visibleTiles}, пропущено: ${skippedTiles}`);
     }
 
     /**

@@ -46,14 +46,38 @@ class Game {
         if (this.gameInitialized) return;
         this.gameInitialized = true;
 
-        // Инициализируем систему чанков со связной генерацией карты
-        this.chunkSystem = new ConnectedChunkSystem(GAME_CONFIG.INITIAL_CHUNK_SIZE); // Чанки размером 16x16 тайлов
+        // Инициализируем реестр типов карт
+        if (typeof mapTypeRegistry !== 'undefined') {
+            mapTypeRegistry.init();
+        }
 
-        // Генерируем стартовый чанк
-        this.chunkSystem.loadChunksAround(0, 0);
+        // Определяем тип карты
+        let mapTheme = null;
+        if (GAME_CONFIG.MAP.RANDOM_TYPE_ON_START) {
+            mapTheme = mapTypeRegistry.getRandomTheme();
+            console.log(`[Game] Случайный тип карты: ${mapTheme.name}`);
+        } else {
+            mapTheme = mapTypeRegistry.getTheme(GAME_CONFIG.MAP.DEFAULT_TYPE);
+            console.log(`[Game] Выбран тип карты: ${mapTheme.name}`);
+        }
 
-        // Создаем персонажа в центре стартового чанка
-        const startPos = this.getValidSpawnPosition();
+        // Создаём генератор карты ограниченного размера
+        const mapGenerator = new FiniteMapGenerator({
+            width: GAME_CONFIG.MAP.WIDTH,
+            height: GAME_CONFIG.MAP.HEIGHT,
+            theme: mapTheme
+        });
+
+        // Генерируем карту
+        const mapData = mapGenerator.generate();
+        console.log(`[Game] Карта сгенерирована: ${mapData.width}x${mapData.height}, комнат: ${mapData.rooms.length}`);
+
+        // Инициализируем систему чанков для ограниченной карты
+        this.chunkSystem = new FiniteChunkSystem(mapData);
+
+        // Создаем персонажа в стартовой позиции
+        const spawnPos = this.chunkSystem.getPlayerSpawnPosition();
+        const startPos = isoTo2D(spawnPos.x, spawnPos.y);
         this.character = new Character(startPos.x, startPos.y);
 
         this.enemies = [];
@@ -940,26 +964,21 @@ class Game {
      * Спаун врагов в загруженных чанках - равномерное распределение
      */
     spawnEnemies() {
-        // Рассчитываем количество врагов пропорционально количеству загруженных чанков
-        const loadedChunksCount = this.chunkSystem.activeChunks.size;
-        const enemiesToSpawn = Math.max(Math.floor(loadedChunksCount * GAME_CONFIG.SPAWN.ENEMIES_PER_CHUNK), GAME_CONFIG.SPAWN.MIN_ENEMIES);
-
-        // Получаем список всех активных чанков
-        const activeChunkKeys = Array.from(this.chunkSystem.activeChunks);
-
-        // Перемешиваем чанки для случайного распределения
-        this.shuffleArray(activeChunkKeys);
-
-        // Распределяем врагов по чанкам
-        for (let i = 0; i < enemiesToSpawn; i++) {
-            // Выбираем чанк по очереди (равномерное распределение)
-            const chunkKey = activeChunkKeys[i % activeChunkKeys.length];
-            const [chunkX, chunkY] = chunkKey.split(',').map(Number);
-
-            const [x, y] = this.getRandomPositionInChunk(chunkX, chunkY);
-            const enemyTypes = ['TANK', 'ASSASSIN', 'MAGE'];
+        // Получаем типы врагов из темы карты
+        const enemyTypes = this.chunkSystem.getEnemyTypes();
+        
+        // Получаем позиции для спавна врагов
+        const playerPos = { x: this.character.x, y: this.character.y };
+        const maxEnemies = GAME_CONFIG.MAP.ENEMY_SPAWN.MAX_ENEMIES_TOTAL || 100;
+        const spawnPositions = this.chunkSystem.getEnemySpawnPositions(maxEnemies, playerPos, 10);
+        
+        console.log(`[Game] Спавн врагов: типов=${enemyTypes.join(',')}, позиций=${spawnPositions.length}`);
+        
+        // Создаём врагов в полученных позициях
+        for (const pos of spawnPositions) {
+            const worldPos = isoTo2D(pos.x, pos.y);
             const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-            this.createEnemy(x, y, randomType);
+            this.createEnemy(worldPos.x, worldPos.y, randomType);
         }
     }
 
